@@ -6,7 +6,7 @@ Folio is an individual Computer Science capstone research project: a personal re
 
 ## Current milestone
 
-Phase 1 implements the Next.js starter, Folio branding, responsive introductory page, TypeScript, CSS, and npm tooling. The illustrated books are decorative artwork, not search results or saved records. Search, authentication, database persistence, ratings, and deployment are **not implemented yet**. No external accounts or environment variables are required to run this stage.
+Phase 2 adds real Open Library discovery: search by title or author, inspect up to 12 results, and open a book detail dialog. Covers, missing metadata, loading, empty results, and errors are handled. The hero’s illustrated books are decorative artwork; the discovery cards use real API data. Authentication, database persistence, ratings, and deployment are **not implemented yet**. No API key is required. An optional contact email identifies regular Open Library usage (see below).
 
 ## Run locally
 
@@ -21,11 +21,12 @@ npm ci
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). Stop the server with Ctrl+C. `npm ci` reproduces the dependency tree from the committed lockfile. Phase 1 does not need an environment file; `.env.example` documents that explicitly.
+Open [localhost:3000](http://localhost:3000). Stop the server with Ctrl+C. `npm ci` reproduces the dependency tree from the committed lockfile. Occasional searches work without an environment file. For regular use, copy `.env.example` to `.env.local` and set your Open Library contact email as described below.
 
 Run the checks:
 
 ```sh
+npm test
 npm run lint
 npm run typecheck
 npm run build
@@ -72,13 +73,13 @@ For compatibility problems, read the actual npm error, check `node --version`, `
 | Standard CSS | Responsive visual design | Implemented starter |
 | Node.js | Server runtime | Used locally |
 | npm | Dependency installation and scripts | Implemented |
-| Open Library | Real book discovery through a server-side integration | Phase 2 |
+| Open Library | Real book discovery through a server-side integration | Implemented |
 | Clerk | Sign-in, sign-up, account UI, server-verified identity | Phase 3 |
 | Prisma | Typed database access and version-controlled migrations | Phase 4 |
 | Supabase PostgreSQL | Persistent relational storage; no Supabase Auth | Phase 4 |
 | Vercel Hobby | Next.js hosting | Phase 8 |
 
-Planned flows:
+Architecture (discovery implemented; authenticated persistence planned):
 
 ```text
 Browser → React / Next.js → server logic → Prisma → Supabase PostgreSQL
@@ -123,7 +124,7 @@ Actual setup findings: the machine's default Node was 23.5.0, so checks use an i
 
 Technology comparisons, service limits, integration findings, and demo/submission material will be expanded as the corresponding work is completed. No integration or deployment results are claimed at this stage. If the course requires an AI-use statement, document the actual assistance and the owner's review, testing, and understanding before submission.
 
-## Phase 1 manual review
+## Phase 1 manual review (historical checkpoint)
 
 - Open the home page and confirm Folio's title, header, illustration, and development notice.
 - Click “Meet Folio” and “About Folio”; both navigate to the introduction section.
@@ -154,3 +155,75 @@ Next's installed lint plugins declare support for ESLint 9 but not ESLint 10, an
 The full `npm audit` still reports **five high-severity entries** from the same transitive `braces` advisory through the development-only lint dependency chain (`braces` → `micromatch` → `fast-glob` → Next's ESLint plugin/config). npm proposes an incompatible downgrade to Next 14 lint configuration; it was not applied. The audit is not clean, despite the clean production-only audit. Track [the braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and upstream compatible fixes.
 
 Next also reports that it ignored an unrelated lockfile outside this repository; the Folio build succeeds using its own lockfile. Next automatically generated `AGENTS.md` with guidance for future tooling; it does not affect the product. npm lists two optional Sharp/WASM support packages as extraneous, including after `npm ci`; installation, lint, type checking, and build still succeed.
+
+
+## Phase 2: book discovery
+
+### What changed and why
+
+`BookSearch.tsx` is a Client Component because it handles form events, loading state, and selected-book state. The page and layout stay Server Components. A TypeScript discriminated union gives the search one explicit state at a time: idle, loading, success, or error. React renders upstream text safely without inserting HTML.
+
+The flow is:
+
+```text
+Submit title/author → GET /api/books/search?q=… → validate query
+→ server fetch to Open Library → normalize unknown JSON → Book[]
+→ React book cards → accessible native detail dialog
+```
+
+- `src/lib/books.ts`: shared book type, 120-character query validation, and 12-result limit.
+- `src/lib/open-library.ts`: fixed HTTPS search endpoint, explicit fields, validation/normalization, deduplication by work ID, 10-second upstream timeout, and safe errors. It is imported only by the server route (and tests), not the client UI.
+- `src/app/api/books/search/route.ts`: Node.js Route Handler using standard Request/Response APIs. Invalid queries return 400, throttling returns 429 with Retry-After, upstream failures return 502, and timeouts return 504.
+- `src/components/BookSearch.tsx`: submit-only searches, a duplicate-request guard, 15-second browser timeout, and cancellation on unmount. No automatic retries or per-keystroke requests.
+- `BookCard.tsx`, `BookCover.tsx`, `BookDetails.tsx`: reusable display components. A native `<dialog>` manages modal focus and Escape. Details reuse existing search metadata, so opening one does not fetch another record.
+
+Cover URLs use validated positive numeric IDs and a fixed Covers API host. Next Image uses the API's already-sized medium covers directly (`unoptimized`), preserving lazy loading and avoiding a second image transformation service. Remote patterns document the allowed source; the numeric-ID construction is what constrains these direct image URLs. Missing/failed images show a readable CSS cover. `?default=false` requests an HTTP error instead of Open Library's blank image when a cover is unavailable.
+
+The first 12 matches are intentionally sufficient for this milestone. Refine a search for more specific results; no pagination or background prefetching is implemented. Searches and selected details are temporary UI state and reset on refresh. No saved-library functionality is simulated.
+
+### Open Library configuration and usage
+
+The [Search API](https://openlibrary.org/dev/docs/api/search), [Covers API](https://openlibrary.org/dev/docs/api/covers), and [usage policy](https://openlibrary.org/developers/api) were checked before implementation. Only the five requested metadata fields are fetched. API response caching uses Next's data cache with a one-hour revalidation window. Cache misses still depend on upstream availability; successful cached content may be served during revalidation.
+
+Open Library specifies a default limit of one request per second and requests application identification plus contact details for regular usage. Set `OPEN_LIBRARY_CONTACT_EMAIL` in your ignored `.env.local` to an email you consent to send to Open Library in the server User-Agent. It is optional for occasional local testing; no email has been copied from Git configuration. Restart the server after changing it. No API key, paid service, or extra npm package is needed. The policy page also links an application registration form for the owner to review before regular public usage.
+
+The browser and server enforce a 1.1-second gap between search starts. The server guard is **per running instance**, not a global or distributed limiter. It resets on cold starts and does not coordinate multiple Vercel instances. This is appropriate only for low-volume milestone testing; revisit shared rate control before public usage grows. It must not be described as a guarantee of aggregate compliance under serverless scaling. Identified traffic still uses the conservative gap.
+
+### Automated tests
+
+`npm test` uses Node 24's built-in test runner and TypeScript stripping; no test framework dependency was added. Imports in tests/server helpers have explicit `.ts` extensions, with `allowImportingTsExtensions` enabled under the existing no-emit TypeScript setup. `type: module` explicitly declares ES module syntax for Node.
+
+Tests cover blank/long queries, whitespace normalization, missing/malformed fields, invalid work IDs, duplicate records, result limits, empty results, fixed-host URL construction, encoded input, cache/timeout settings, upstream 429/500 responses, network failures, malformed JSON, and timeouts. The Route Handler is also exercised with mocked upstream fetch to verify validation, normalization, rate limiting, and HTTP errors. Mocks are used only in tests; there are no production fixtures or test-only API routes.
+
+### Manual verification checklist
+
+1. Start with Node 24 and `npm run dev`; open the home page and click **Discover books**.
+2. Submit an empty search: expect a clear validation message.
+3. Search **The Hobbit**: expect real book cards with covers, title, author, and year.
+4. Open a card; check metadata and the Open Library link. Tab through the dialog, close using Escape and the Close button, and check focus returns to the card.
+5. Search **Toni Morrison** to check author discovery.
+6. Search an unlikely random string to check the no-results guidance.
+7. Inspect mobile cards and dialog at a 390px viewport.
+8. Run `npm test`, `npm run lint`, `npm run typecheck`, and `npm run build`.
+
+### Actual issue resolved
+
+Browser testing found that React Strict Mode's effect replay closed and reopened the native dialog, then delivered a queued close event that cleared the selected book. The close handler now ignores that event when the dialog is already open. This keeps development behavior correct without disabling Strict Mode.
+
+
+### Phase 2 verification results
+
+Executed on Node 24.21.0:
+
+- Six automated test groups passed (`npm test`), including simulated upstream failures and HTTP timeout behavior.
+- ESLint, TypeScript, production build, and Git whitespace checks passed. Build output includes the dynamic `/api/books/search` route.
+- Live browser title search: **The Hobbit** returned 12 cards, including Tolkien's 1937 work; its real cover rendered. Another result exercised the missing-cover and unknown-author fallbacks.
+- Live browser author search: **Toni Morrison** returned 12 cards including **Beloved** and **The Bluest Eye**.
+- Empty submission displayed validation; the live query `zzqfolio947281nonexistentbook` displayed the no-results guidance. Loading text and the disabled submit button were observed during requests.
+- Details opened with correct selected metadata, closed via both Close and Escape, and restored focus to the originating card.
+- At 390px, cards and the detail dialog did not overflow horizontally. Mobile cover images completed loading; the dialog used a single-column layout.
+- No browser warning/error logs were captured in the working localhost tab. API outages were simulated in automated tests, not induced against the live service or claimed as browser-tested outages.
+
+The previous preview tab failed to reconnect through its numeric loopback URL; a fresh `http://localhost:3000` tab worked with the existing server. An attempted second dev server correctly refused the occupied project lock; the existing server was retained.
+
+The Phase 1 toolchain audit limitations remain recorded above. No dependencies or lockfile entries changed in Phase 2. Open Library metadata can itself contain inaccurate years; Folio validates field types and displays the supplied data without claiming to fact-check it.
