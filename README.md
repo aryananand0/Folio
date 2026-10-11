@@ -6,7 +6,7 @@ Folio is an individual Computer Science capstone research project: a personal re
 
 ## Current milestone
 
-Phase 2 adds real Open Library discovery: search by title or author, inspect up to 12 results, and open a book detail dialog. Covers, missing metadata, loading, empty results, and errors are handled. The hero’s illustrated books are decorative artwork; the discovery cards use real API data. Authentication, database persistence, ratings, and deployment are **not implemented yet**. No API key is required. An optional contact email identifies regular Open Library usage (see below).
+Phase 3 adds Clerk authentication: sign-in, sign-up, account controls, a server-protected library route, and a safe setup checkpoint when Clerk keys are absent. Book discovery remains public. Database persistence, ratings, and deployment are **not implemented yet**. The development Clerk application is connected and the complete browser flow is verified.
 
 ## Run locally
 
@@ -21,7 +21,7 @@ npm ci
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). Stop the server with Ctrl+C. `npm ci` reproduces the dependency tree from the committed lockfile. Occasional searches work without an environment file. For regular use, copy `.env.example` to `.env.local` and set your Open Library contact email as described below.
+Open [localhost:3000](http://localhost:3000). Stop the server with Ctrl+C. `npm ci` reproduces the dependency tree from the committed lockfile. The app builds without an environment file and displays an authentication setup checkpoint. To enable Clerk, copy `.env.example` to ignored `.env.local`, add the two Clerk development keys, and restart the server. For regular Open Library use, also set the optional contact email described below.
 
 Run the checks:
 
@@ -74,7 +74,7 @@ For compatibility problems, read the actual npm error, check `node --version`, `
 | Node.js | Server runtime | Used locally |
 | npm | Dependency installation and scripts | Implemented |
 | Open Library | Real book discovery through a server-side integration | Implemented |
-| Clerk | Sign-in, sign-up, account UI, server-verified identity | Phase 3 |
+| Clerk | Sign-in, sign-up, account UI, server-verified identity | Implemented and verified locally |
 | Prisma | Typed database access and version-controlled migrations | Phase 4 |
 | Supabase PostgreSQL | Persistent relational storage; no Supabase Auth | Phase 4 |
 | Vercel Hobby | Next.js hosting | Phase 8 |
@@ -104,7 +104,7 @@ Each phase ends with verification, explanation, and an owner-controlled Git comm
 
 ## External configuration checkpoints
 
-- **Phase 3:** Create a Folio application in the [Clerk Dashboard](https://dashboard.clerk.com/). Its API Keys page provides the publishable and secret keys; configure them locally when the integration is added. Never send secret keys in chat.
+- **Phase 3:** The Clerk CLI created and linked the **Folio** development application and pulled its keys into ignored `.env.local`. Another developer can use `npx clerk@latest init` followed by `npx clerk@latest env pull`, or copy development keys from the [Clerk Dashboard](https://dashboard.clerk.com/) API Keys page. Never send secret keys in chat.
 - **Phase 4:** Create a free project in the [Supabase Dashboard](https://supabase.com/dashboard). The Connect dialog provides PostgreSQL URLs. Serverless application traffic will use the transaction pooler; migrations need a suitable direct or session connection. Confirm exact configuration against the stable Prisma version selected at that phase.
 - **Phase 8:** After the owner pushes the code, import the repository in the [Vercel Dashboard](https://vercel.com/new), select Hobby, configure environment variables and Clerk's deployment domain, apply migrations, and verify the deployed site. Deployment has not happened yet.
 
@@ -227,3 +227,68 @@ Executed on Node 24.21.0:
 The previous preview tab failed to reconnect through its numeric loopback URL; a fresh `http://localhost:3000` tab worked with the existing server. An attempted second dev server correctly refused the occupied project lock; the existing server was retained.
 
 The Phase 1 toolchain audit limitations remain recorded above. No dependencies or lockfile entries changed in Phase 2. Open Library metadata can itself contain inaccurate years; Folio validates field types and displays the supplied data without claiming to fact-check it.
+
+## Phase 3: Clerk authentication
+
+### Architecture and authorization
+
+Folio uses `@clerk/nextjs` 7.9.14, selected after checking its Node, Next.js, and React peer ranges. `src/proxy.ts` follows the Next.js 16 `proxy.ts` convention and runs Clerk's request middleware whenever both keys are configured. The proxy establishes session context; it does not act as the sole authorization layer.
+
+The private flow is:
+
+```text
+Browser request → Clerk proxy verifies session context
+→ /library calls auth.protect() on the server
+→ signed-out visitor redirects to /sign-in
+→ signed-in visitor receives private page content
+```
+
+The library page protects itself because authorization belongs beside the private resource. Future database queries and mutations will also call Clerk's async server helper and use its verified `userId`; they will never accept an owner ID from the browser. This follows Clerk's current resource-level guidance and avoids its deprecated route-matcher protection pattern.
+
+`ClerkProvider` lives inside `<body>` and is activated only when a valid-looking publishable/secret key pair exists. Public discovery remains available while signed out. The header uses Clerk's sign-in, sign-up, and user-account controls, with one consistent **My library** link in both session states. Catch-all `/sign-in` and `/sign-up` pages support Clerk's multi-step flows and return successful authentication to `/library`.
+
+The home page reads only the server-verified session boolean. Signed-in readers receive a distinct welcome hero and discovery desk with native search completions and prompt buttons. Those completions are a small local list and do not issue per-keystroke network requests; Open Library is still contacted only after the user submits a search.
+
+When keys are absent, Folio deliberately renders `AuthSetup` instead of initializing Clerk. This keeps a clean clone buildable, makes missing external configuration explicit, and does not fake an authenticated session. The placeholder library contains no personal data and is shown only after `auth.protect()` when Clerk is configured.
+
+### Configure Clerk locally
+
+1. Run `npx clerk@latest init`, authenticate in the browser, and create or select an application named **Folio**.
+2. Run `npx clerk@latest env pull` to write the linked development keys to ignored `.env.local`. Alternatively, copy them from the [Clerk Dashboard](https://dashboard.clerk.com/) API Keys page without pasting either key into chat.
+3. If configuring manually, create the ignored local file:
+
+   ```sh
+   cp .env.example .env.local
+   ```
+
+4. In `.env.local`, fill these two values from Clerk. The application supplies its auth route configuration directly, so these are the only required secrets:
+
+   ```env
+   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+   CLERK_SECRET_KEY=sk_test_...
+   ```
+
+5. Stop and restart `npm run dev`; environment changes are loaded at server startup.
+6. Visit `/sign-up`, create a test account, and confirm the profile control appears. Open `/library`, sign out, and revisit `/library` to confirm it redirects to `/sign-in`.
+
+`.env.local` is ignored by Git. The publishable key is intentionally browser-visible; the secret key is server-only. Do not prefix the secret with `NEXT_PUBLIC_`, expose it through props, log it, commit it, or use a production key during local milestone work.
+
+### Phase 3 verification results
+
+Completed with the linked Clerk development instance:
+
+- Seven automated test groups passed, including key-pair activation checks and all Phase 2 integration logic.
+- ESLint, TypeScript, `git diff --check`, and the production build passed.
+- The build generated `/library`, catch-all sign-in/sign-up pages, and the Next.js proxy.
+- `npx clerk@latest doctor` confirmed the CLI login, linked Folio application, reachable development instance, and both ignored local keys without printing their values.
+- Browser review confirmed the real Clerk sign-up and sign-in widgets load, including email/password and Google options.
+- A signed-out request to `/library` redirects to `/sign-in` and preserves `/library` as the return URL.
+- The no-key fallback was separately checked: it displays setup instructions and usable navigation instead of crashing.
+- Chrome verification completed a real Google sign-in, showed the Clerk user account control, and rendered `/library` only after the server verified the session.
+- Signing out returned to the public home page; revisiting `/library` redirected to the real sign-in page with the library return URL preserved.
+- Follow-up browser review confirmed the authenticated header contains one **My library** link, the signed-in discovery design differs visibly from the public page, a completion prompt fills the search field, and submitting **Beloved** returns real Open Library results.
+- A separate signed-out browser session confirmed the original public discovery experience remains available without member prompts or completions.
+
+Use `http://localhost:3000` for local Clerk testing. Binding the server only to `127.0.0.1` caused Clerk's development handshake to canonicalize back to `localhost` and left Next.js proxying to the wrong listener. The explicit Turbopack root also prevents an unrelated lockfile above the repository from making Next.js watch the wrong workspace.
+
+Database-backed user records are intentionally deferred to Phases 4 and 5.

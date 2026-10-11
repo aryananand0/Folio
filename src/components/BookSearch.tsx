@@ -11,10 +11,20 @@ type SearchState =
   | { kind: "success"; query: string; books: Book[] }
   | { kind: "error"; message: string };
 
-export default function BookSearch() {
+const MEMBER_SUGGESTIONS = [
+  "The Hobbit",
+  "Beloved",
+  "Pride and Prejudice",
+  "The Left Hand of Darkness",
+  "James Baldwin",
+  "Toni Morrison",
+];
+
+export default function BookSearch({ signedIn = false }: Readonly<{ signedIn?: boolean }>) {
   const [query, setQuery] = useState("");
   const [state, setState] = useState<SearchState>({ kind: "idle" });
   const [selected, setSelected] = useState<Book | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const lastSearchAt = useRef(0);
 
@@ -60,18 +70,32 @@ export default function BookSearch() {
   }
 
   return (
-    <section id="discover" className="discovery" aria-labelledby="discover-title">
+    <section id="discover" className={`discovery${signedIn ? " member-discovery" : ""}`} aria-labelledby="discover-title">
       <div className="discovery-heading">
-        <div><p className="eyebrow">Find your next chapter</p><h2 id="discover-title">Discover a good book.</h2></div>
+        <div><p className="eyebrow">{signedIn ? "Your discovery desk" : "Find your next chapter"}</p><h2 id="discover-title">{signedIn ? "What do you want to read next?" : "Discover a good book."}</h2></div>
         <p>Books and covers from <a href="https://openlibrary.org" target="_blank" rel="noopener noreferrer">Open Library<span className="sr-only"> (opens in a new tab)</span></a></p>
       </div>
+      {signedIn ? (
+        <div className="member-search-intro">
+          <div>
+            <span className="member-kicker">SIGNED-IN SEARCH</span>
+            <p>Start typing to see completions, or choose a prompt to fill the search box.</p>
+          </div>
+          <div className="search-prompts" aria-label="Suggested searches">
+            {MEMBER_SUGGESTIONS.slice(0, 4).map((suggestion) => (
+              <button key={suggestion} type="button" onClick={() => { setQuery(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <form className="search-form" onSubmit={handleSearch} role="search" aria-label="Book discovery" noValidate>
         <label htmlFor="book-query">Search by title or author</label>
         <div className="search-controls">
-          <input id="book-query" name="q" type="search" placeholder="Try The Hobbit or Toni Morrison" maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => setQuery(event.target.value)} aria-describedby="search-help" />
+          <input ref={inputRef} id="book-query" name="q" type="search" list={signedIn ? "member-search-completions" : undefined} placeholder={signedIn ? "Start typing a title or author" : "Try The Hobbit or Toni Morrison"} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => setQuery(event.target.value)} aria-describedby="search-help" />
+          {signedIn ? <datalist id="member-search-completions">{MEMBER_SUGGESTIONS.map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist> : null}
           <button className="button" type="submit" disabled={state.kind === "loading"}>{state.kind === "loading" ? "Searching…" : "Search books"}</button>
         </div>
-        <p id="search-help">Search when you’re ready. We’ll show up to {SEARCH_LIMIT} matching books.</p>
+        <p id="search-help">{signedIn ? "Search completion is on. Choose a suggestion or finish your own query." : "Search when you’re ready."} We’ll show up to {SEARCH_LIMIT} matching books.</p>
       </form>
       <div className="search-feedback" role="status" aria-live="polite" aria-atomic="true">
         {state.kind === "idle" && <p>Your next read starts here. Enter a title or an author above.</p>}

@@ -32,7 +32,7 @@ export default function BookDetails({ book, onClose }: { book: Book; onClose: ()
           <p className="detail-author">{book.author}</p>
           <dl><dt>First published</dt><dd>{book.firstPublishYear ?? "Not available"}</dd></dl>
           <a className="text-link" href={`https://openlibrary.org${book.openLibraryKey}`} target="_blank" rel="noopener noreferrer">View on Open Library <span aria-hidden="true">↗</span><span className="sr-only"> (opens in a new tab)</span></a>
-          <p className="detail-note">Your personal shelf is coming soon. Saving books, ratings, and notes will be available after accounts and libraries are connected.</p>
+          <p className="detail-note">Accounts are ready. Database-backed saving, ratings, and notes arrive with the personal library milestones.</p>
         </div>
       </div>
     </dialog>
