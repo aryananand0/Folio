@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { parseBookId, parseReadingStatus } from "@/lib/library";
+import { parseBookId, parseLibraryUpdate } from "@/lib/library";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -20,21 +20,20 @@ export async function PATCH(request: Request, context: RouteContext) {
   const owner = await getOwnerAndBookId(context);
   if ("error" in owner) return owner.error;
 
-  let status;
+  let update;
   try {
-    const body: unknown = await request.json();
-    status = parseReadingStatus(typeof body === "object" && body !== null && "status" in body ? body.status : undefined);
+    update = parseLibraryUpdate(await request.json());
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Reading status is invalid." }, { status: 400 });
+    return Response.json({ error: error instanceof Error ? error.message : "Book update is invalid." }, { status: 400 });
   }
 
   try {
     const result = await prisma.savedBook.updateMany({
       where: { id: owner.bookId, clerkUserId: owner.userId },
-      data: { status },
+      data: update,
     });
     if (result.count === 0) return Response.json({ error: "Book not found." }, { status: 404 });
-    return Response.json({ status });
+    return Response.json(update);
   } catch {
     return Response.json({ error: "Couldn’t update this book. Please try again." }, { status: 500 });
   }

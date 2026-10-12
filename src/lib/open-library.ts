@@ -1,4 +1,4 @@
-import { SEARCH_LIMIT, validateQuery, type Book } from "./books.ts";
+import { DEFAULT_DISCOVERY_QUERY, SEARCH_LIMIT, validateQuery, type Book, type BookSearchResult } from "./books.ts";
 
 export class BookSearchError extends Error {
   status: number;
@@ -54,11 +54,19 @@ export function normalizeBooks(payload: unknown): Book[] {
   return books;
 }
 
+export function normalizeSearchResult(payload: unknown): BookSearchResult {
+  const books = normalizeBooks(payload);
+  if (!isRecord(payload)) throw new BookSearchError("Book search returned an unexpected response. Please try again.");
+  const rawTotal = payload.numFound ?? payload.num_found;
+  const total = Number.isSafeInteger(rawTotal) && Number(rawTotal) >= 0 ? Number(rawTotal) : books.length;
+  return { books, total: Math.max(total, books.length), totalExact: payload.numFoundExact !== false };
+}
+
 /** Only the route handler imports this module; never accepts a user-provided URL. */
-export async function searchBooks(query: string, fetcher: typeof fetch = fetch): Promise<Book[]> {
+export async function searchBooks(query: string, fetcher: typeof fetch = fetch): Promise<BookSearchResult> {
   const url = new URL("https://openlibrary.org/search.json");
   url.search = new URLSearchParams({
-    q: validateQuery(query),
+    q: validateQuery(query || DEFAULT_DISCOVERY_QUERY),
     fields: "key,title,author_name,first_publish_year,cover_i",
     limit: String(SEARCH_LIMIT),
   }).toString();
@@ -78,7 +86,7 @@ export async function searchBooks(query: string, fetcher: typeof fetch = fetch):
       throw new BookSearchError("Book search is busy. Please wait a moment and try again.", 429);
     }
     if (!response.ok) throw new BookSearchError("Book search is temporarily unavailable. Please try again shortly.");
-    return normalizeBooks(await response.json());
+    return normalizeSearchResult(await response.json());
   } catch (error) {
     if (error instanceof BookSearchError) throw error;
     if (error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name)) {

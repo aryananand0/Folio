@@ -13,6 +13,16 @@ export const STATUS_LABELS: Record<ReadingStatusValue, string> = {
 export type LibraryBook = Book & {
   id: string;
   status: ReadingStatusValue;
+  rating: number | null;
+  notes: string | null;
+};
+
+export const MAX_NOTES_LENGTH = 2000;
+
+export type LibraryUpdate = {
+  status?: ReadingStatusValue;
+  rating?: number | null;
+  notes?: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,6 +64,31 @@ export function parseReadingStatus(value: unknown): ReadingStatusValue {
     return value as ReadingStatusValue;
   }
   throw new Error("Reading status is invalid.");
+}
+
+export function parseLibraryUpdate(value: unknown): LibraryUpdate {
+  if (!isRecord(value)) throw new Error("Book update is invalid.");
+  const allowed = new Set(["status", "rating", "notes"]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) throw new Error("Book update contains an unexpected field.");
+
+  const update: LibraryUpdate = {};
+  if ("status" in value) update.status = parseReadingStatus(value.status);
+  if ("rating" in value) {
+    if (value.rating === null) update.rating = null;
+    else if (Number.isInteger(value.rating) && Number(value.rating) >= 1 && Number(value.rating) <= 5) {
+      update.rating = Number(value.rating);
+    } else throw new Error("Rating must be a whole number from 1 to 5, or empty.");
+  }
+  if ("notes" in value) {
+    if (value.notes === null) update.notes = null;
+    else if (typeof value.notes === "string") {
+      const notes = value.notes.replace(/\r\n?/g, "\n").trim();
+      if (notes.length > MAX_NOTES_LENGTH) throw new Error(`Notes must be ${MAX_NOTES_LENGTH} characters or fewer.`);
+      update.notes = notes || null;
+    } else throw new Error("Notes must be text.");
+  }
+  if (Object.keys(update).length === 0) throw new Error("Choose a change to save.");
+  return update;
 }
 
 export function parseLibraryFilter(value: string | string[] | undefined): LibraryFilter {

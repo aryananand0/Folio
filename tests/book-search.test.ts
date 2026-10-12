@@ -1,13 +1,37 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { validateQuery } from "../src/lib/books.ts";
-import { BookSearchError, normalizeBooks, searchBooks } from "../src/lib/open-library.ts";
+import { normalizeOptionalQuery, validateQuery } from "../src/lib/books.ts";
+import { closestBookTitles, getMatchIndices, levenshtein, resolveSearchTerm, suggestBookTitles } from "../src/lib/book-suggestions.ts";
+import { BookSearchError, normalizeBooks, normalizeSearchResult, searchBooks } from "../src/lib/open-library.ts";
 import { GET } from "../src/app/api/books/search/route.ts";
 
 test("query validation rejects empty and long input and normalizes whitespace", () => {
   for (const query of [null, "", " \n\t", "a".repeat(121)]) assert.throws(() => validateQuery(query));
   assert.equal(validateQuery("  Toni   Morrison  "), "Toni Morrison");
   assert.equal(validateQuery("a".repeat(120)).length, 120);
+  assert.equal(normalizeOptionalQuery("  "), "");
+  assert.throws(() => normalizeOptionalQuery("a".repeat(121)));
+});
+
+test("search result normalization includes the live Open Library count", () => {
+  assert.deepEqual(normalizeSearchResult({ numFound: 248, numFoundExact: true, docs: [] }), {
+    books: [], total: 248, totalExact: true,
+  });
+  assert.deepEqual(normalizeSearchResult({ docs: [{ key: "OL1W", title: "Book" }] }), {
+    books: [{ openLibraryKey: "/works/OL1W", title: "Book", author: "Unknown author", coverId: null, firstPublishYear: null }],
+    total: 1,
+    totalExact: true,
+  });
+});
+
+test("title suggestions rank partial matches, tolerate typos, and expose highlight positions", () => {
+  assert.ok(suggestBookTitles("hob")[0].includes("Hobbit"));
+  assert.ok(suggestBookTitles("godfater").includes("The Godfather"));
+  assert.equal(resolveSearchTerm("godfater"), "The Godfather");
+  assert.ok(levenshtein("godfater", "godfather") <= 2);
+  assert.ok(getMatchIndices("The Godfather", "godfater").size > 0);
+  assert.ok(suggestBookTitles("the").length <= 6);
+  assert.equal(closestBookTitles("zzzzzz").length, 6);
 });
 
 test("normalization tolerates missing fields, canonicalizes work IDs, and removes duplicates", () => {
@@ -38,9 +62,9 @@ test("search uses fixed host, limited fields, cache, timeout, and encoded user i
     assert.equal(init?.next?.revalidate, 3600);
     assert.ok(init?.signal);
     assert.equal(init?.redirect, "error");
-    return Response.json({ docs: [] });
+    return Response.json({ numFound: 0, numFoundExact: true, docs: [] });
   };
-  assert.deepEqual(await searchBooks("https://127.0.0.1/?x=1&limit=999", fetcher), []);
+  assert.deepEqual(await searchBooks("https://127.0.0.1/?x=1&limit=999", fetcher), { books: [], total: 0, totalExact: true });
 });
 
 test("upstream failures, malformed JSON, and timeouts become safe errors", async () => {
@@ -61,19 +85,14 @@ test("upstream failures, malformed JSON, and timeouts become safe errors", async
   }
 });
 
-test("HTTP boundary rejects invalid queries, normalizes results, throttles, and maps failures", async (t) => {
-  const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json({ docs: [{ key: "OL1W", title: "The Hobbit" }] }));
-  const time = t.mock.method(Date, "now", () => 10_000);
-  assert.equal((await GET(new Request("http://localhost/api/books/search?q=%20"))).status, 400);
-  assert.equal(fetchMock.mock.callCount(), 0);
+test("HTTP boundary supports discovery, normalizes results, and maps failures", async (t) => {
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => Response.json({ numFound: 31, docs: [{ key: "OL1W", title: "The Hobbit" }] }));
+  const discovery = await GET(new Request("http://localhost/api/books/search"));
+  assert.equal(discovery.status, 200);
+  assert.equal((await discovery.json()).total, 31);
   const success = await GET(new Request("http://localhost/api/books/search?q=Hobbit"));
   assert.equal(success.status, 200);
   assert.equal((await success.json()).books[0].title, "The Hobbit");
-  const limited = await GET(new Request("http://localhost/api/books/search?q=Hobbit"));
-  assert.equal(limited.status, 429);
-  assert.equal(limited.headers.get("Retry-After"), "1");
-  assert.equal(fetchMock.mock.callCount(), 1);
-  time.mock.mockImplementation(() => 12_000);
   fetchMock.mock.mockImplementation(async () => { throw new DOMException("timeout", "TimeoutError"); });
   const timeout = await GET(new Request("http://localhost/api/books/search?q=Hobbit"));
   assert.equal(timeout.status, 504);

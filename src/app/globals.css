@@ -58,13 +58,13 @@ h3 { font-size: 23px; line-height: 1.25; margin: 16px 0 12px; }
 .site-footer > span:last-child { margin-left: auto; }
 @media (max-width: 900px) { .hero { gap: 30px; } .book-art { height: 400px; } .book { width: 155px; height: 238px; } .book-back { left: 8%; } .book-front { left: 37%; } .header-note { display: none; } }
 @media (max-width: 650px) { .container { width: calc(100% - 40px); } .site-header { min-height: 85px; flex-wrap: wrap; padding-block: 16px; } .primary-nav { order: 3; width: 100%; justify-content: flex-start; gap: 16px; overflow-x: auto; padding-bottom: 2px; } .auth-controls { margin-left: auto; } .hero { grid-template-columns: 1fr; padding: 48px 0; gap: 36px; } h1 { letter-spacing: -2px; } .hero-description { max-width: 100%; } .book-art { width: 100%; max-width: 400px; justify-self: center; height: 390px; } .book-back { left: 16%; top: 85px; } .book-front { left: 43%; top: 90px; } h2 { font-size: 32px; } .feature-grid { grid-template-columns: 1fr; gap: 28px; } .about { padding-block: 38px; } .site-footer { flex-wrap: wrap; gap: 8px 16px; } .site-footer > span:last-child { width: 100%; margin-left: 0; } }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .button { transition: none; } .search-spinner { animation: none; } }
 
 /* Discovery: the interactive client boundary sits within the server-rendered page. */
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .65; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #8a652a; outline-offset: 5px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #8a652a; outline-offset: 5px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .discovery { border-top: 1px solid var(--line); padding: 52px 0 64px; scroll-margin-top: 24px; }
 .discovery-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
@@ -78,10 +78,25 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .search-prompts button { border: 1px solid #829486; border-radius: 999px; padding: 7px 11px; background: transparent; color: var(--paper); font-size: 11px; }
 .search-prompts button:hover { background: #3b5845; }
 .search-form { margin-top: 24px; }
-.search-form label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.search-form label { display: block; font-size: 14px; font-weight: 600; }
+.search-label-row { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 10px; }
+.search-label-row output { color: #3f5c48; font: 18px Georgia, serif; white-space: nowrap; }
 .search-controls { display: flex; gap: 12px; }
-.search-controls input { min-width: 0; flex: 1; border: 1px solid #a9b3a2; border-radius: 3px; padding: 14px 18px; color: var(--ink); background: #fffdf8; }
+.search-controls input, .search-input-wrap input { min-width: 0; flex: 1; border: 1px solid #a9b3a2; border-radius: 3px; padding: 14px 92px 14px 18px; color: var(--ink); background: #fffdf8; }
 .search-controls .button { border: 0; align-items: center; justify-content: center; min-width: 160px; }
+.search-combobox { position: relative; }
+.search-input-wrap { display: flex; position: relative; }
+.search-input-wrap input { width: 100%; }
+.search-input-wrap input::-webkit-search-cancel-button { display: none; }
+.search-clear { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); border: 0; padding: 4px; background: transparent; color: #52685a; font-size: 11px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.search-spinner { position: absolute; right: 62px; top: calc(50% - 7px); width: 14px; height: 14px; border: 2px solid #b7c0b5; border-top-color: var(--ink); border-radius: 50%; animation: search-spin .7s linear infinite; }
+.search-suggestions { position: absolute; z-index: 4; top: calc(100% + 6px); left: 0; right: 0; margin: 0; padding: 6px; list-style: none; border: 1px solid #a9b3a2; border-radius: 4px; background: #fffdf8; box-shadow: 0 14px 30px #263d3226; }
+.search-suggestions button { display: block; width: 100%; border: 0; border-radius: 3px; padding: 10px 12px; text-align: left; background: transparent; color: var(--ink); }
+.search-suggestions button:hover, .search-suggestions button:focus-visible { background: var(--sage); }
+.search-suggestions mark { background: #e2c989; color: #28382f; }
+.closest-titles { display: flex; flex-wrap: wrap; gap: 8px; }
+.closest-titles button { border: 1px solid #9da997; border-radius: 999px; padding: 7px 11px; background: #fffdf8; color: var(--ink); font-size: 12px; }
+@keyframes search-spin { to { transform: rotate(360deg); } }
 #search-help { font-size: 12px; color: var(--muted); margin-top: 10px; }
 .search-feedback { color: var(--muted); font-size: 14px; margin-top: 28px; }
 .search-empty { border: 1px dashed #bac1b0; padding: 24px; background: #f0f1e9; }
@@ -123,6 +138,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .search-prompts { justify-content: flex-start; }
   .search-controls { flex-direction: column; }
   .search-controls input { width: 100%; }
+  .search-label-row { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .search-suggestions { position: static; margin-top: 6px; }
   .book-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 16px; }
   .book-cover { padding: 12px; }
   .book-card-button h3 { font-size: 19px; }
@@ -163,6 +180,22 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .library-book-copy h2 { margin: 10px 0 7px; font-size: 25px; overflow-wrap: anywhere; }
 .library-book-copy label { display: block; margin-top: 18px; font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
 .library-book-copy select { width: 100%; margin-top: 7px; border: 1px solid #a9b3a2; border-radius: 3px; padding: 9px 10px; background: var(--paper); color: var(--ink); }
+.review-fields { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.review-fields fieldset { margin: 0; padding: 0; border: 0; }
+.review-fields legend, .notes-label-row label { font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
+.star-rating { display: flex; align-items: center; gap: 4px; margin-top: 7px; }
+.star-rating label { margin: 0; cursor: pointer; }
+.star-rating input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.star-rating label span[aria-hidden="true"] { color: #c9c8be; font-size: 24px; line-height: 1; transition: color 120ms; }
+.star-rating label.star-selected span[aria-hidden="true"], .star-rating label:hover span[aria-hidden="true"] { color: #a97922; }
+.star-rating label:has(input:focus-visible) span[aria-hidden="true"] { outline: 3px solid #8a652a; outline-offset: 3px; border-radius: 2px; }
+.clear-rating { margin-left: 8px; border: 0; padding: 2px; background: transparent; color: var(--muted); font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.notes-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 16px; }
+.notes-label-row label { margin: 0; }
+.notes-label-row span { color: var(--muted); font-size: 10px; }
+.review-fields textarea { display: block; width: 100%; resize: vertical; min-height: 104px; margin-top: 7px; border: 1px solid #a9b3a2; border-radius: 3px; padding: 10px; background: var(--paper); color: var(--ink); line-height: 1.45; }
+.save-review { width: 100%; margin-top: 10px; border: 1px solid var(--ink); border-radius: 3px; padding: 9px 12px; background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 700; }
+.save-review:hover { background: #3b5845; }
 .status-badge { display: inline-block; border-radius: 999px; padding: 4px 9px; font-size: 9px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
 .status-want-to-read { background: #e8e3d2; color: #665223; }
 .status-reading { background: #dce8dd; color: #31563c; }

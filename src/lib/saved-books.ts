@@ -20,6 +20,8 @@ export async function getLibrary(userId: string, filter: LibraryFilter) {
         coverId: true,
         firstPublishYear: true,
         status: true,
+        rating: true,
+        notes: true,
       },
     }),
     prisma.savedBook.groupBy({

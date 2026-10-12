@@ -1,72 +1,96 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { MAX_QUERY_LENGTH, SEARCH_LIMIT, validateQuery, type Book } from "@/lib/books";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { bookMatchesQuery, closestBookTitles, getMatchIndices, resolveSearchTerm, suggestBookTitles } from "@/lib/book-suggestions";
+import { MAX_QUERY_LENGTH, SEARCH_LIMIT, type Book, type BookSearchResult } from "@/lib/books";
 import BookCard from "./BookCard";
 import BookDetails from "./BookDetails";
 
-type SearchState =
-  | { kind: "idle" }
-  | { kind: "loading"; query: string }
-  | { kind: "success"; query: string; books: Book[] }
-  | { kind: "error"; message: string };
+type SearchData = BookSearchResult & { query: string };
 
-const MEMBER_SUGGESTIONS = [
-  "The Hobbit",
-  "Beloved",
-  "Pride and Prejudice",
-  "The Left Hand of Darkness",
-  "James Baldwin",
-  "Toni Morrison",
-];
+function HighlightedTitle({ title, query }: { title: string; query: string }) {
+  const matches = getMatchIndices(title, query);
+  return title.split("").map((character, index) => matches.has(index)
+    ? <mark key={`${character}-${index}`}>{character}</mark>
+    : <Fragment key={`${character}-${index}`}>{character}</Fragment>);
+}
 
 export default function BookSearch() {
   const [query, setQuery] = useState("");
-  const [state, setState] = useState<SearchState>({ kind: "idle" });
+  const [data, setData] = useState<SearchData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [focused, setFocused] = useState(false);
   const [selected, setSelected] = useState<Book | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const controllerRef = useRef<AbortController | null>(null);
-  const lastSearchAt = useRef(0);
+  const defaultData = useRef<SearchData | null>(null);
+  const requestSequence = useRef(0);
 
-  useEffect(() => () => controllerRef.current?.abort(), []);
+  const suggestions = useMemo(() => suggestBookTitles(query, data?.books), [query, data?.books]);
+  const closestTitles = useMemo(() => closestBookTitles(query, data?.books), [query, data?.books]);
+  const trimmedQuery = query.trim();
+  const isSettled = data?.query === trimmedQuery;
+  const locallyFiltered = useMemo(
+    () => trimmedQuery && !isSettled && data ? data.books.filter((book) => bookMatchesQuery(book, trimmedQuery)) : data?.books ?? [],
+    [data, isSettled, trimmedQuery],
+  );
+  const visibleBooks = !isSettled && locallyFiltered.length === 0 ? data?.books ?? [] : locallyFiltered;
+  const visibleCount = isSettled ? data?.total ?? 0 : locallyFiltered.length;
+  const showSuggestions = focused && trimmedQuery.length > 0 && suggestions.length > 0;
 
-  async function handleSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    // Ref guard also prevents rapid submissions before React updates the button.
-    if (controllerRef.current) return;
-    let term: string;
-    try {
-      term = validateQuery(query);
-    } catch (error) {
-      setState({ kind: "error", message: (error as Error).message });
-      return;
-    }
-    if (Date.now() - lastSearchAt.current < 1100) {
-      setState({ kind: "error", message: "Please wait a second before searching again." });
-      return;
-    }
-    lastSearchAt.current = Date.now();
+  useEffect(() => {
+    const normalized = query.trim().replace(/\s+/g, " ");
+    const sequence = ++requestSequence.current;
     const controller = new AbortController();
-    controllerRef.current = controller;
-    setSelected(null);
-    setState({ kind: "loading", query: term });
-    try {
-      const response = await fetch(`/api/books/search?${new URLSearchParams({ q: term })}`, {
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(typeof data.error === "string" ? data.error : "Search is unavailable. Please try again.");
-      if (!Array.isArray(data.books)) throw new Error("Search returned an unexpected response. Please try again.");
-      setState({ kind: "success", query: term, books: data.books });
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      setState({ kind: "error", message: error instanceof Error && error.name === "TimeoutError"
-        ? "Search took too long. Please try again."
-        : error instanceof Error && error.name === "Error"
-          ? error.message : "Couldn’t connect to search. Check your connection and try again." });
-    } finally {
-      controllerRef.current = null;
+
+    if (!normalized && defaultData.current) {
+      setData(defaultData.current);
+      setLoading(false);
+      setError("");
+      return () => controller.abort();
     }
+
+    setLoading(true);
+    setError("");
+    const timer = window.setTimeout(async () => {
+      const target = resolveSearchTerm(normalized);
+      try {
+        const params = target ? `?${new URLSearchParams({ q: target })}` : "";
+        const response = await fetch(`/api/books/search${params}`, {
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+        });
+        const result: unknown = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof result === "object" && result && "error" in result && typeof result.error === "string"
+            ? result.error : "Search is unavailable. Please try again.");
+        }
+        if (!isSearchResult(result) || sequence !== requestSequence.current) return;
+        const next = { ...result, query: normalized };
+        setData(next);
+        if (!normalized) defaultData.current = next;
+        setSelected(null);
+      } catch (searchError) {
+        if (controller.signal.aborted || sequence !== requestSequence.current) return;
+        setError(searchError instanceof Error && searchError.name === "TimeoutError"
+          ? "Search took too long. Please try again."
+          : searchError instanceof Error ? searchError.message : "Couldn’t connect to search. Check your connection and try again.");
+      } finally {
+        if (sequence === requestSequence.current) setLoading(false);
+      }
+    // The visible list and suggestions update immediately; the remote refresh waits
+    // for a typing pause so Folio stays within Open Library's default request limit.
+    }, normalized ? 1000 : 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
+
+  function chooseSuggestion(title: string) {
+    setQuery(title);
+    setFocused(false);
+    inputRef.current?.focus();
   }
 
   return (
@@ -77,38 +101,83 @@ export default function BookSearch() {
       </div>
       <div className="member-search-intro">
         <div>
-          <span className="member-kicker">SIGNED-IN SEARCH</span>
-          <p>Start typing to see completions, or choose a prompt to fill the search box.</p>
+          <span className="member-kicker">LIVE BOOK SEARCH</span>
+          <p>Results narrow as you type. Folio also recognizes close spellings of popular titles.</p>
         </div>
         <div className="search-prompts" aria-label="Suggested searches">
-          {MEMBER_SUGGESTIONS.slice(0, 4).map((suggestion) => (
-            <button key={suggestion} type="button" onClick={() => { setQuery(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>
+          {["The Hobbit", "Beloved", "Pride and Prejudice", "The Godfather"].map((title) => (
+            <button key={title} type="button" onClick={() => chooseSuggestion(title)}>{title}</button>
           ))}
         </div>
       </div>
-      <form className="search-form" onSubmit={handleSearch} role="search" aria-label="Book discovery" noValidate>
-        <label htmlFor="book-query">Search by title or author</label>
-        <div className="search-controls">
-          <input ref={inputRef} id="book-query" name="q" type="search" list="member-search-completions" placeholder="Start typing a title or author" maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => setQuery(event.target.value)} aria-describedby="search-help" />
-          <datalist id="member-search-completions">{MEMBER_SUGGESTIONS.map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist>
-          <button className="button" type="submit" disabled={state.kind === "loading"}>{state.kind === "loading" ? "Searching…" : "Search books"}</button>
+      <div className="search-form" role="search" aria-label="Book discovery">
+        <div className="search-label-row">
+          <label htmlFor="book-query">Search by title or author</label>
+          <output htmlFor="book-query" aria-live="polite">{visibleCount.toLocaleString()} {visibleCount === 1 ? "book" : "books"}</output>
         </div>
-        <p id="search-help">Search completion is on. Choose a suggestion or finish your own query. We’ll show up to {SEARCH_LIMIT} matching books.</p>
-      </form>
-      <div className="search-feedback" role="status" aria-live="polite" aria-atomic="true">
-        {state.kind === "idle" && <p>Your next read starts here. Enter a title or an author above.</p>}
-        {state.kind === "loading" && <p>Searching for “{state.query}”…</p>}
-        {state.kind === "success" && (state.books.length
-          ? <p>Showing {state.books.length} {state.books.length === 1 ? "book" : "books"} for “{state.query}”. Refine your search to find a specific title.</p>
-          : <div className="search-empty"><h3>No books found.</h3><p>We couldn’t find a match for “{state.query}”. Try a shorter title, an author’s name, or check the spelling.</p></div>)}
+        <div className="search-combobox">
+          <div className="search-input-wrap">
+            <input
+              ref={inputRef}
+              id="book-query"
+              name="q"
+              type="search"
+              placeholder="Start typing a title or author"
+              maxLength={MAX_QUERY_LENGTH}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              aria-autocomplete="list"
+              aria-controls="book-suggestions"
+              aria-expanded={showSuggestions}
+              aria-describedby="search-help"
+              role="combobox"
+            />
+            {loading && <span className="search-spinner" aria-hidden="true" />}
+            {query && <button className="search-clear" type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }} aria-label="Clear search">Clear</button>}
+          </div>
+          {showSuggestions && (
+            <ul id="book-suggestions" className="search-suggestions" role="listbox" aria-label="Suggested book titles">
+              {suggestions.map((title) => (
+                <li key={title} role="option" aria-selected="false">
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseSuggestion(title)}>
+                    <HighlightedTitle title={title} query={query} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <p id="search-help">No submit button needed. We show the best {SEARCH_LIMIT} results and update the total as you type.</p>
       </div>
-      {state.kind === "error" && <p className="search-error" role="alert">{state.message}</p>}
-      {state.kind === "success" && state.books.length > 0 && (
-        <ul className="book-grid" aria-label="Book search results">
-          {state.books.map((book) => <BookCard key={book.openLibraryKey} book={book} onOpen={() => setSelected(book)} />)}
+      <div className="search-feedback" role="status" aria-live="polite" aria-atomic="true">
+        {loading && <p>Updating results…</p>}
+        {!loading && data && data.books.length > 0 && <p>{trimmedQuery ? `Showing the best matches for “${trimmedQuery}”.` : "Browse the full discovery shelf or start typing to narrow it down."}</p>}
+        {!loading && data?.books.length === 0 && (
+          <div className="search-empty">
+            <h3>No exact books found.</h3>
+            <p>Try one of the closest titles:</p>
+            <div className="closest-titles">
+              {closestTitles.map((title) => <button key={title} type="button" onClick={() => chooseSuggestion(title)}>{title}</button>)}
+            </div>
+          </div>
+        )}
+      </div>
+      {error && <p className="search-error" role="alert">{error}</p>}
+      {visibleBooks.length > 0 && (
+        <ul className="book-grid" aria-label="Book search results" aria-busy={loading}>
+          {visibleBooks.map((book) => <BookCard key={book.openLibraryKey} book={book} onOpen={() => setSelected(book)} />)}
         </ul>
       )}
       {selected && <BookDetails key={selected.openLibraryKey} book={selected} onClose={() => setSelected(null)} />}
     </section>
   );
+}
+
+function isSearchResult(value: unknown): value is BookSearchResult {
+  return typeof value === "object" && value !== null
+    && "books" in value && Array.isArray(value.books)
+    && "total" in value && Number.isSafeInteger(value.total)
+    && "totalExact" in value && typeof value.totalExact === "boolean";
 }

@@ -4,6 +4,7 @@ import {
   parseBookId,
   parseBookToSave,
   parseLibraryFilter,
+  parseLibraryUpdate,
   parseReadingStatus,
 } from "../src/lib/library.ts";
 
@@ -32,6 +33,19 @@ test("saved-book input accepts only normalized Open Library work metadata", () =
     { openLibraryKey: "/works/OL1W", title: "Book", author: "Author", coverId: -1 },
     { openLibraryKey: "/works/OL1W", title: "Book", author: "Author", firstPublishYear: "1937" },
   ]) assert.throws(() => parseBookToSave(invalid));
+});
+
+test("ratings and notes accept valid edits and reject malformed updates", () => {
+  assert.deepEqual(parseLibraryUpdate({ rating: 5, notes: "  A memorable ending.  " }), {
+    rating: 5,
+    notes: "A memorable ending.",
+  });
+  assert.deepEqual(parseLibraryUpdate({ rating: null, notes: "" }), { rating: null, notes: null });
+  assert.deepEqual(parseLibraryUpdate({ status: "FINISHED" }), { status: "FINISHED" });
+  for (const invalid of [
+    null, {}, { rating: 0 }, { rating: 6 }, { rating: 3.5 }, { rating: "5" },
+    { notes: 42 }, { notes: "a".repeat(2001) }, { clerkUserId: "browser-owner" },
+  ]) assert.throws(() => parseLibraryUpdate(invalid));
 });
 
 test("library status, filters, and record IDs reject unexpected values", () => {
