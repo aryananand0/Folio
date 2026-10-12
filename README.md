@@ -10,6 +10,26 @@ Folio is a personal reading library built for a university Computer Science rese
 
 ![Folio's discovery, collection, and reading-memory feature overview](docs/images/folio-features.jpg)
 
+## Inside Folio
+
+### Signed-in discovery
+
+The authenticated discovery desk loads real Open Library results, shows a live catalog count, and provides suggested searches without requiring a submit button.
+
+![Folio's signed-in discovery desk with live book results from Open Library](docs/images/folio-discover-authenticated.jpg)
+
+### Book details
+
+Readers can inspect normalized Open Library metadata and save a title directly to their private Want to Read shelf.
+
+![Folio's authenticated book-details dialog with a cover, metadata, and save action](docs/images/folio-book-details-authenticated.jpg)
+
+### Private library
+
+The private library displays persisted Supabase records, reading-summary totals, status filters, ratings, notes, and owner-protected editing controls.
+
+![Folio's signed-in private library with summary counts and saved books](docs/images/folio-library-authenticated.jpg)
+
 ## How it works
 
 1. A visitor learns what Folio offers and signs in or creates an account.
@@ -35,7 +55,7 @@ The application provides accessible loading, empty, error, and not-found states 
 | Supabase PostgreSQL | Persistent saved books, status, ratings, and notes |
 | Open Library | Live book search metadata and cover images |
 | npm | Locked dependency installation and project scripts |
-| Vercel | Prepared hosting target for the Next.js application |
+| Vercel | Production hosting and Git-connected Next.js deployments |
 
 ## Architecture
 
