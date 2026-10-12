@@ -1,4 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
+import Link from "next/link";
 import BookSearch from "@/components/BookSearch";
 import { isClerkConfigured } from "@/lib/auth-config";
 
@@ -7,22 +8,24 @@ export default async function Home() {
 
   return (
     <main id="main-content" className="container" tabIndex={-1}>
-      <section className={`hero${signedIn ? " member-hero" : ""}`} aria-labelledby="hero-title">
-        <div className="hero-copy">
-          <p className="eyebrow">{signedIn ? "Welcome back to Folio" : "A little space for a good book"}</p>
-          <h1 id="hero-title">{signedIn ? <>Find what belongs<br />on your <em>next shelf.</em></> : <>Your books.<br />Your reading <em>journey.</em></>}</h1>
-          <p className="hero-description">{signedIn ? "Search with title suggestions, preview the details, and keep building a reading life that feels like yours." : "For the stories you want to find, the pages you’re lost in, and the books that stay with you."}</p>
-          <a className="button" href="#discover">{signedIn ? "Start a new search" : "Discover books"} <span aria-hidden="true">↓</span></a>
-          <p className="hero-footnote">{signedIn ? "Your private library is ready when you are." : "A personal library, one book at a time."}</p>
-        </div>
-        <div className="book-art" aria-hidden="true">
-          <span className="art-caption">THE READING LIFE</span>
-          <div className="book book-back"><span>A world<br />between<br />the covers.</span><i>FOLIO EDITIONS</i></div>
-          <div className="book book-front"><small>A PLACE TO BEGIN</small><span>One<br />more<br /><em>chapter.</em></span><div className="book-emblem">f.</div><i>YOUR NEXT GREAT STORY</i></div>
-          <span className="art-bottom">Find your next chapter.</span>
-        </div>
-      </section>
-      <BookSearch signedIn={signedIn} />
+      {!signedIn && (
+        <section className="hero" aria-labelledby="hero-title">
+          <div className="hero-copy">
+            <p className="eyebrow">A little space for a good book</p>
+            <h1 id="hero-title">Your books.<br />Your reading <em>journey.</em></h1>
+            <p className="hero-description">For the stories you want to find, the pages you’re lost in, and the books that stay with you.</p>
+            <Link className="button" href="/sign-up">Create your library <span aria-hidden="true">→</span></Link>
+            <p className="hero-footnote">Sign in or create an account to discover books.</p>
+          </div>
+          <div className="book-art" aria-hidden="true">
+            <span className="art-caption">THE READING LIFE</span>
+            <div className="book book-back"><span>A world<br />between<br />the covers.</span><i>FOLIO EDITIONS</i></div>
+            <div className="book book-front"><small>A PLACE TO BEGIN</small><span>One<br />more<br /><em>chapter.</em></span><div className="book-emblem">f.</div><i>YOUR NEXT GREAT STORY</i></div>
+            <span className="art-bottom">Find your next chapter.</span>
+          </div>
+        </section>
+      )}
+      {signedIn && <BookSearch />}
       <section id="about" className="about" aria-labelledby="about-title">
         <div className="section-heading">
           <p className="eyebrow">Thoughtfully simple</p>

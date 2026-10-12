@@ -20,8 +20,6 @@ a:focus-visible { outline: 3px solid #8a652a; outline-offset: 6px; }
 .auth-button { border: 1px solid var(--ink); border-radius: 3px; padding: 9px 13px; background: var(--ink); color: var(--paper); font-size: 12px; font-weight: 600; }
 .auth-button:hover { background: #3b5845; }
 .hero { display: grid; grid-template-columns: 1.2fr 1fr; align-items: center; gap: 60px; padding: 78px 0 88px; }
-.member-hero { margin-top: 28px; padding: clamp(44px, 6vw, 76px); border: 1px solid #cbd2c4; border-radius: 5px; background: linear-gradient(135deg, #eef0e7 0%, #f8f6f0 68%); }
-.member-hero .book-art { background: #dfe5d9; }
 .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 2.4px; text-transform: uppercase; margin: 0 0 24px; }
 h1, h2, h3 { font-family: Georgia, 'Times New Roman', serif; font-weight: 400; }
 h1 { font-size: clamp(44px, 5.5vw, 72px); letter-spacing: -3px; line-height: 1.12; margin: 0 0 28px; }
@@ -59,7 +57,7 @@ h3 { font-size: 23px; line-height: 1.25; margin: 16px 0 12px; }
 .footer-brand { font: 26px Georgia, serif; color: var(--ink); letter-spacing: -1px; }
 .site-footer > span:last-child { margin-left: auto; }
 @media (max-width: 900px) { .hero { gap: 30px; } .book-art { height: 400px; } .book { width: 155px; height: 238px; } .book-back { left: 8%; } .book-front { left: 37%; } .header-note { display: none; } }
-@media (max-width: 650px) { .container { width: calc(100% - 40px); } .site-header { min-height: 85px; flex-wrap: wrap; padding-block: 16px; } .primary-nav { order: 3; width: 100%; justify-content: flex-start; gap: 16px; overflow-x: auto; padding-bottom: 2px; } .auth-controls { margin-left: auto; } .hero { grid-template-columns: 1fr; padding: 48px 0; gap: 36px; } .member-hero { margin-top: 20px; padding-inline: 24px; } h1 { letter-spacing: -2px; } .hero-description { max-width: 100%; } .book-art { width: 100%; max-width: 400px; justify-self: center; height: 390px; } .book-back { left: 16%; top: 85px; } .book-front { left: 43%; top: 90px; } h2 { font-size: 32px; } .feature-grid { grid-template-columns: 1fr; gap: 28px; } .about { padding-block: 38px; } .site-footer { flex-wrap: wrap; gap: 8px 16px; } .site-footer > span:last-child { width: 100%; margin-left: 0; } }
+@media (max-width: 650px) { .container { width: calc(100% - 40px); } .site-header { min-height: 85px; flex-wrap: wrap; padding-block: 16px; } .primary-nav { order: 3; width: 100%; justify-content: flex-start; gap: 16px; overflow-x: auto; padding-bottom: 2px; } .auth-controls { margin-left: auto; } .hero { grid-template-columns: 1fr; padding: 48px 0; gap: 36px; } h1 { letter-spacing: -2px; } .hero-description { max-width: 100%; } .book-art { width: 100%; max-width: 400px; justify-self: center; height: 390px; } .book-back { left: 16%; top: 85px; } .book-front { left: 43%; top: 90px; } h2 { font-size: 32px; } .feature-grid { grid-template-columns: 1fr; gap: 28px; } .about { padding-block: 38px; } .site-footer { flex-wrap: wrap; gap: 8px 16px; } .site-footer > span:last-child { width: 100%; margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .button { transition: none; } }
 
 /* Discovery: the interactive client boundary sits within the server-rendered page. */

@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReadingStatus {
+  WANT_TO_READ
+  READING
+  FINISHED
+}
+
+model SavedBook {
+  id               String        @id @default(uuid()) @db.Uuid
+  clerkUserId      String        @db.VarChar(255)
+  openLibraryKey   String        @db.VarChar(255)
+  title            String        @db.VarChar(500)
+  author           String        @db.VarChar(500)
+  coverId          Int?
+  firstPublishYear Int?
+  status           ReadingStatus @default(WANT_TO_READ)
+  rating           Int?
+  notes            String?       @db.Text
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@unique([clerkUserId, openLibraryKey])
+  @@index([clerkUserId, status])
+}

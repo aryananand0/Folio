@@ -6,7 +6,7 @@ Folio is an individual Computer Science capstone research project: a personal re
 
 ## Current milestone
 
-Phase 3 adds Clerk authentication: sign-in, sign-up, account controls, a server-protected library route, and a safe setup checkpoint when Clerk keys are absent. Book discovery remains public. Database persistence, ratings, and deployment are **not implemented yet**. The development Clerk application is connected and the complete browser flow is verified.
+Phase 4 adds the Supabase PostgreSQL data model, Prisma client, versioned migration, and a live connection check. Book discovery is now available only after sign-in; signed-out visitors see the public introduction and account entry points. Persistent library actions, ratings, notes, and deployment are **not implemented yet**.
 
 ## Run locally
 
@@ -33,6 +33,17 @@ npm run build
 ```
 
 `npm run start` serves the production build after `npm run build` succeeds. These are separate checks: a successful build alone does not replace ESLint.
+
+Phase 4 database commands:
+
+```sh
+npm run db:generate
+npm run db:migrate -- --name describe_the_change
+npm run db:status
+npm run db:check
+```
+
+`db:migrate` creates and applies a development migration. `db:deploy` applies already committed migrations in hosted environments. `db:check` makes harmless queries that confirm the `SavedBook` table is available and report whether row-level security is enabled. It never prints a connection string.
 
 ## Understanding this starter
 
@@ -75,8 +86,8 @@ For compatibility problems, read the actual npm error, check `node --version`, `
 | npm | Dependency installation and scripts | Implemented |
 | Open Library | Real book discovery through a server-side integration | Implemented |
 | Clerk | Sign-in, sign-up, account UI, server-verified identity | Implemented and verified locally |
-| Prisma | Typed database access and version-controlled migrations | Phase 4 |
-| Supabase PostgreSQL | Persistent relational storage; no Supabase Auth | Phase 4 |
+| Prisma 7.10 | Typed database access and version-controlled migrations | Implemented |
+| Supabase PostgreSQL | Persistent relational storage; no Supabase Auth | Implemented and verified |
 | Vercel Hobby | Next.js hosting | Phase 8 |
 
 Architecture (discovery implemented; authenticated persistence planned):
@@ -105,7 +116,7 @@ Each phase ends with verification, explanation, and an owner-controlled Git comm
 ## External configuration checkpoints
 
 - **Phase 3:** The Clerk CLI created and linked the **Folio** development application and pulled its keys into ignored `.env.local`. Another developer can use `npx clerk@latest init` followed by `npx clerk@latest env pull`, or copy development keys from the [Clerk Dashboard](https://dashboard.clerk.com/) API Keys page. Never send secret keys in chat.
-- **Phase 4:** Create a free project in the [Supabase Dashboard](https://supabase.com/dashboard). The Connect dialog provides PostgreSQL URLs. Serverless application traffic will use the transaction pooler; migrations need a suitable direct or session connection. Confirm exact configuration against the stable Prisma version selected at that phase.
+- **Phase 4:** Create a free project in the [Supabase Dashboard](https://supabase.com/dashboard). Put its transaction-pooler URL (port 6543) in `DATABASE_URL` and its session-pooler URL (port 5432), or direct URL when IPv6 is available, in `DIRECT_URL`. Keep both in ignored `.env.local`. `prisma.config.ts` prefers `DIRECT_URL` for migrations while the application client uses `DATABASE_URL`.
 - **Phase 8:** After the owner pushes the code, import the repository in the [Vercel Dashboard](https://vercel.com/new), select Hobby, configure environment variables and Clerk's deployment domain, apply migrations, and verify the deployed site. Deployment has not happened yet.
 
 Real environment files are ignored by Git. Only explicitly public variables may use `NEXT_PUBLIC_`; database URLs and Clerk secret keys remain server-only.
@@ -123,6 +134,52 @@ Reviewed official documentation and npm version/peer-dependency metadata during 
 Actual setup findings: the machine's default Node was 23.5.0, so checks use an isolated temporary Node 24 runtime without changing the system installation. npm registry access initially failed inside the restricted environment; approved network access allowed version lookups and installation. Prisma's `latest` npm tag pointed to an 8.0 release candidate during research; Prisma is deferred to Phase 4, where a stable version will be selected explicitly rather than blindly installing `latest`.
 
 Technology comparisons, service limits, integration findings, and demo/submission material will be expanded as the corresponding work is completed. No integration or deployment results are claimed at this stage. If the course requires an AI-use statement, document the actual assistance and the owner's review, testing, and understanding before submission.
+
+## Phase 4: Prisma and Supabase PostgreSQL
+
+### Data model and ownership boundary
+
+`SavedBook` stores a stable Open Library work key together with the title, author, optional cover/year metadata, reading status, optional rating and notes, and timestamps. The composite unique constraint on `(clerkUserId, openLibraryKey)` prevents one account from saving the same work twice while allowing another account to save it independently. An index on `(clerkUserId, status)` supports the owner-scoped status views planned for Phase 5.
+
+The database enum limits status to `WANT_TO_READ`, `READING`, or `FINISHED`. The migration also adds a PostgreSQL check constraint so a non-null rating must be between 1 and 5. Prisma does not model check constraints in its schema language, so the versioned SQL migration is the source of truth for that rule. Phase 5 and 6 server operations will obtain `clerkUserId` from Clerk's server-side `auth()` result; no library operation will trust an owner ID sent by the browser.
+
+### Connection design
+
+Prisma 7 uses the `@prisma/adapter-pg` driver adapter. `src/lib/prisma.ts` keeps one client during development reloads and creates a normal process-scoped client in production. The runtime client reads only `DATABASE_URL`. The Prisma CLI reads `DIRECT_URL` first so migration commands use a connection that supports sessions; it falls back to `DATABASE_URL` for conventional PostgreSQL environments.
+
+The generated Prisma client lives under ignored `src/generated/prisma/`. `postinstall` regenerates it after a clean dependency install, while `db:generate` provides an explicit command. Generated code is reproducible from the committed schema and Prisma version and does not belong in Git.
+
+The schema migration is committed under `prisma/migrations/20261011000000_initialize_saved_books/`, followed by a small migration that records row-level security in version control. Future model changes require a new migration; `prisma db push` is not the project workflow because it does not provide the same reviewable migration history.
+
+### Configuration and verification
+
+Copy the two empty database variables from `.env.example` into ignored `.env.local`, paste the URLs from Supabase's Connect dialog, and percent-encode any password characters that have special meaning in a URL. Then run:
+
+```sh
+npm run db:deploy
+npm run db:status
+npm run db:check
+```
+
+The deploy command applies committed migrations, status checks migration history, and the final command verifies both PostgreSQL connectivity and the generated Prisma model. The connectivity script reports only the database/schema names and row count, never credentials.
+
+The live Phase 4 project uses Supabase's shared transaction pooler on port 6543 for application traffic and its session pooler on port 5432 for migrations. Both migrations were deployed successfully: Prisma reports the database schema is current, `SavedBook` is queryable, and row-level security is enabled on the table. Prisma's migration history under `prisma/migrations/` remains the schema source of truth. Supabase's GitHub integration expects Supabase CLI migrations under a different directory, so this project does not duplicate the schema in a second migration system.
+
+Official references reviewed for this integration:
+
+- [Supabase: Connecting with Prisma](https://supabase.com/docs/guides/database/prisma)
+- [Prisma schema overview](https://www.prisma.io/docs/orm/v7/prisma-schema/overview)
+- [Prisma PostgreSQL connector](https://www.prisma.io/docs/orm/overview/databases/postgresql)
+
+### Phase 4 verification results
+
+- `prisma migrate deploy`: both committed migrations applied successfully to the Supabase project.
+- `prisma migrate status`: database schema is up to date.
+- `npm run db:check`: connected to the `postgres` database in the `public` schema; `SavedBook` was queryable with zero initial rows and row-level security enabled.
+- `npm test`: all seven test groups passed.
+- `npm run lint`, `npm run typecheck`, and `npm run build`: passed with the configured Clerk and Supabase environment.
+- Browser: signed-out navigation contains one **My library** link and no Discover link or search form; the public account CTA remains available. Signed-in rendering goes directly to the completion-enabled discovery desk without the former welcome-back hero.
+- `.env.local` remains ignored and no database credential is tracked.
 
 ## Phase 1 manual review (historical checkpoint)
 

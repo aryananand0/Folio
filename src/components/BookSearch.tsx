@@ -20,7 +20,7 @@ const MEMBER_SUGGESTIONS = [
   "Toni Morrison",
 ];
 
-export default function BookSearch({ signedIn = false }: Readonly<{ signedIn?: boolean }>) {
+export default function BookSearch() {
   const [query, setQuery] = useState("");
   const [state, setState] = useState<SearchState>({ kind: "idle" });
   const [selected, setSelected] = useState<Book | null>(null);
@@ -70,32 +70,30 @@ export default function BookSearch({ signedIn = false }: Readonly<{ signedIn?: b
   }
 
   return (
-    <section id="discover" className={`discovery${signedIn ? " member-discovery" : ""}`} aria-labelledby="discover-title">
+    <section id="discover" className="discovery member-discovery" aria-labelledby="discover-title">
       <div className="discovery-heading">
-        <div><p className="eyebrow">{signedIn ? "Your discovery desk" : "Find your next chapter"}</p><h2 id="discover-title">{signedIn ? "What do you want to read next?" : "Discover a good book."}</h2></div>
+        <div><p className="eyebrow">Your discovery desk</p><h2 id="discover-title">What do you want to read next?</h2></div>
         <p>Books and covers from <a href="https://openlibrary.org" target="_blank" rel="noopener noreferrer">Open Library<span className="sr-only"> (opens in a new tab)</span></a></p>
       </div>
-      {signedIn ? (
-        <div className="member-search-intro">
-          <div>
-            <span className="member-kicker">SIGNED-IN SEARCH</span>
-            <p>Start typing to see completions, or choose a prompt to fill the search box.</p>
-          </div>
-          <div className="search-prompts" aria-label="Suggested searches">
-            {MEMBER_SUGGESTIONS.slice(0, 4).map((suggestion) => (
-              <button key={suggestion} type="button" onClick={() => { setQuery(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>
-            ))}
-          </div>
+      <div className="member-search-intro">
+        <div>
+          <span className="member-kicker">SIGNED-IN SEARCH</span>
+          <p>Start typing to see completions, or choose a prompt to fill the search box.</p>
         </div>
-      ) : null}
+        <div className="search-prompts" aria-label="Suggested searches">
+          {MEMBER_SUGGESTIONS.slice(0, 4).map((suggestion) => (
+            <button key={suggestion} type="button" onClick={() => { setQuery(suggestion); inputRef.current?.focus(); }}>{suggestion}</button>
+          ))}
+        </div>
+      </div>
       <form className="search-form" onSubmit={handleSearch} role="search" aria-label="Book discovery" noValidate>
         <label htmlFor="book-query">Search by title or author</label>
         <div className="search-controls">
-          <input ref={inputRef} id="book-query" name="q" type="search" list={signedIn ? "member-search-completions" : undefined} placeholder={signedIn ? "Start typing a title or author" : "Try The Hobbit or Toni Morrison"} maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => setQuery(event.target.value)} aria-describedby="search-help" />
-          {signedIn ? <datalist id="member-search-completions">{MEMBER_SUGGESTIONS.map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist> : null}
+          <input ref={inputRef} id="book-query" name="q" type="search" list="member-search-completions" placeholder="Start typing a title or author" maxLength={MAX_QUERY_LENGTH} value={query} onChange={(event) => setQuery(event.target.value)} aria-describedby="search-help" />
+          <datalist id="member-search-completions">{MEMBER_SUGGESTIONS.map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist>
           <button className="button" type="submit" disabled={state.kind === "loading"}>{state.kind === "loading" ? "Searching…" : "Search books"}</button>
         </div>
-        <p id="search-help">{signedIn ? "Search completion is on. Choose a suggestion or finish your own query." : "Search when you’re ready."} We’ll show up to {SEARCH_LIMIT} matching books.</p>
+        <p id="search-help">Search completion is on. Choose a suggestion or finish your own query. We’ll show up to {SEARCH_LIMIT} matching books.</p>
       </form>
       <div className="search-feedback" role="status" aria-live="polite" aria-atomic="true">
         {state.kind === "idle" && <p>Your next read starts here. Enter a title or an author above.</p>}
