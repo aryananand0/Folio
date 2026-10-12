@@ -44,7 +44,7 @@ Research Milestone: aryananand0
 ## Folio research milestone
 
 - Personal research repository: https://github.com/aryananand0/Folio
-- Live application: REPLACE_WITH_VERIFIED_VERCEL_URL
+- Live application: https://folio-three-mocha.vercel.app
 - Demonstration video: REPLACE_WITH_VIDEO_LINK_OR_ATTACHMENT
 
 Folio is a full-stack personal reading library built with Next.js, React, TypeScript, Node.js, Clerk, Prisma, Supabase PostgreSQL, Open Library, npm, and Vercel. The demonstration covers discovery, authentication, private persistence, status, ratings, notes, refresh behavior, and removal.

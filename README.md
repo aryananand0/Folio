@@ -4,6 +4,8 @@
 
 Folio is a personal reading library built for a university Computer Science research milestone. It lets a reader discover real books through Open Library, sign in with Clerk, save books to a private collection, organize them by reading status, and keep a one-to-five-star rating and personal notes. The project demonstrates one complete TypeScript web stack while keeping the product small enough to understand end to end.
 
+**Live application:** [folio-three-mocha.vercel.app](https://folio-three-mocha.vercel.app)
+
 ![Folio's desktop home page with its editorial book artwork](docs/images/folio-home.jpg)
 
 ![Folio's discovery, collection, and reading-memory feature overview](docs/images/folio-features.jpg)
@@ -201,15 +203,13 @@ The completed local verification includes:
 - desktop and 390-pixel responsive review;
 - ESLint, TypeScript, automated tests, and a production build.
 
-Deployment is prepared but is not claimed as successful until the public URL passes the checklist in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+The Vercel deployment was smoke tested with Clerk authentication, Open Library search, typo-tolerant suggestions, book details, the private Supabase-backed library, and reading-status filters. The full repeatable production checklist remains in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 The current full npm audit reports nine high-severity entries across transitive Prisma CLI and Next.js ESLint dependency chains; four Prisma-chain entries are still reported with `--omit=dev`. They include tooling that Folio does not invoke in a request path and a MySQL driver Folio does not use, but the audit is not clean. npm proposes breaking downgrades of Prisma and the Next.js lint configuration, so those changes were not applied without upstream-compatible fixes. Recheck the advisories during dependency upgrades.
 
 ## Deployment
 
-Folio needs no custom `vercel.json`. The repository declares Node 24, runs `prisma generate` in `postinstall`, uses a serverless-safe database pooler, and includes a secret-safe preflight command. Follow [the Vercel deployment guide](docs/DEPLOYMENT.md) to apply migrations, import the GitHub repository, add environment variables, select the correct Clerk mode, deploy, and verify the public application.
-
-No public URL is listed yet because the hosted application has not been validated.
+Folio is deployed at [folio-three-mocha.vercel.app](https://folio-three-mocha.vercel.app). The repository needs no custom `vercel.json`: it declares Node 24, runs `prisma generate` in `postinstall`, and uses a serverless-safe Supabase transaction pooler. [The deployment guide](docs/DEPLOYMENT.md) documents the environment, migration, import, and verification process.
 
 ## Demonstration and submission
 
