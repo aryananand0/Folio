@@ -2,369 +2,231 @@
 
 **Your books. Your reading journey.**
 
-Folio is an individual Computer Science capstone research project: a personal reading library for discovering books, organizing reading status, and keeping ratings and notes. Its purpose is to learn and demonstrate a complete web stack through an understandable application.
+Folio is a personal reading library built for a university Computer Science research milestone. It lets a reader discover real books through Open Library, sign in with Clerk, save books to a private collection, organize them by reading status, and keep a one-to-five-star rating and personal notes. The project demonstrates one complete TypeScript web stack while keeping the product small enough to understand end to end.
 
-## Current milestone
+![Folio's desktop home page with its editorial book artwork](docs/images/folio-home.jpg)
 
-Phase 7 refines the completed application: signed-in readers can search Open Library, save books, organize their private shelves, and persist ratings and notes in Supabase PostgreSQL. This milestone strengthens accessibility, error recovery, responsive behavior, and automated authorization checks. Deployment remains for Phase 8.
+![Folio's discovery, collection, and reading-memory feature overview](docs/images/folio-features.jpg)
 
-## Run locally
+## How it works
 
-Install Node.js **24 LTS** with npm from [Node.js](https://nodejs.org/en/download). If you already use nvm, `nvm install` followed by `nvm use` reads the included `.nvmrc`. Confirm `node --version` starts with `v24.`. The project's `engines` setting also selects Node 24 on Vercel.
+1. A visitor learns what Folio offers and signs in or creates an account.
+2. The signed-in discovery page narrows its current shelf immediately as the reader types, then refreshes it from Open Library after a short pause. It includes a live count, highlighted title suggestions, typo tolerance, and closest-title guidance.
+3. A submitted query is validated by Folio's server and sent to Open Library. Folio normalizes the response before it reaches React.
+4. A reader opens a result and saves it. The server obtains the owner ID from the verified Clerk session.
+5. The private library stores the book independently of Open Library. Status, rating, and notes persist in Supabase PostgreSQL.
+6. Every read, edit, and removal is scoped to the authenticated owner.
 
-After the initial source has been committed and pushed by the repository owner:
+The application provides accessible loading, empty, error, and not-found states and responsive layouts for phone and desktop widths.
 
-```sh
+## Technology stack
+
+| Technology | Use in Folio |
+| --- | --- |
+| Next.js 16 App Router | Pages, layouts, Server Components, Route Handlers, metadata, and production build |
+| React 19 | Interactive search, dialogs, filters, and library editing |
+| TypeScript | Static checks for components, server logic, API data, and tests |
+| Standard CSS | The responsive ivory, forest, charcoal, sage, and gold visual system |
+| Node.js 24 | Local tooling and the server runtime used by Next.js |
+| Clerk | Sign-up, sign-in, account controls, verified sessions, and private-route protection |
+| Prisma 7 | Typed queries, the PostgreSQL model, and version-controlled migrations |
+| Supabase PostgreSQL | Persistent saved books, status, ratings, and notes |
+| Open Library | Live book search metadata and cover images |
+| npm | Locked dependency installation and project scripts |
+| Vercel | Prepared hosting target for the Next.js application |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  U[Reader] --> R[React and Next.js]
+  R --> S[Next.js server logic]
+  S --> P[Prisma]
+  P --> D[(Supabase PostgreSQL)]
+  S --> O[Open Library API]
+  C[Clerk] --> I[Verified identity]
+  I --> A[Server-side authorization]
+  A --> S
+```
+
+The browser never supplies a trusted owner ID. A library Route Handler verifies the Clerk session, validates unknown request data, and includes the resulting `userId` in each Prisma operation. Saved metadata lives in PostgreSQL, so an existing library does not depend on Open Library being available.
+
+Open Library requests use a fixed upstream host, selected fields, a timeout, normalized results, a one-hour Next.js cache, and conservative request spacing. The UI protects fast typing from stale responses with request cancellation and request identity checks.
+
+## Data model
+
+`SavedBook` contains:
+
+- a UUID primary key;
+- the Clerk owner ID and stable Open Library work key;
+- title, author, optional cover ID, and optional first-publication year;
+- one of `WANT_TO_READ`, `READING`, or `FINISHED`;
+- an optional integer rating from 1 to 5 and optional notes;
+- created and updated timestamps.
+
+The pair `(clerkUserId, openLibraryKey)` is unique, so one reader cannot save the same work twice. A database check constraint enforces the rating range. The owner/status index supports private shelf filtering. Row-level security is enabled with no public policies; Prisma is the trusted server connection, and application queries still enforce Clerk ownership.
+
+## Project structure
+
+```text
+prisma/                  schema and committed SQL migrations
+scripts/                 database and deployment preflight checks
+src/app/                 pages, Route Handlers, shared layout, and error states
+src/components/          search, book details, auth, and library interfaces
+src/lib/                 validation, Open Library, auth, Prisma, and data access
+tests/                   Node test-runner coverage for server and pure logic
+docs/DEPLOYMENT.md       Vercel setup and production validation
+docs/DEMO.md             demonstration checklist and submission issue draft
+```
+
+## Local setup
+
+### Prerequisites
+
+- Git
+- Node.js **24 LTS** and npm; `.nvmrc` and `package.json` both identify the expected runtime
+- a Clerk development application
+- a Supabase PostgreSQL project
+
+Clone and install the exact locked dependency tree:
+
+```bash
 git clone https://github.com/aryananand0/Folio.git
 cd Folio
 npm ci
-npm run dev
+cp .env.example .env.local
 ```
 
-Open [localhost:3000](http://localhost:3000). Stop the server with Ctrl+C. `npm ci` reproduces the dependency tree from the committed lockfile. The app builds without an environment file and displays an authentication setup checkpoint. To enable Clerk, copy `.env.example` to ignored `.env.local`, add the two Clerk development keys, and restart the server. For regular Open Library use, also set the optional contact email described below.
+Fill `.env.local` with your own values. Never commit this file.
 
-Run the checks:
-
-```sh
-npm test
-npm run lint
-npm run typecheck
-npm run build
-```
-
-`npm run start` serves the production build after `npm run build` succeeds. These are separate checks: a successful build alone does not replace ESLint.
-
-Phase 4 database commands:
-
-```sh
-npm run db:generate
-npm run db:migrate -- --name describe_the_change
-npm run db:status
-npm run db:check
-npm run db:check-library
-```
-
-`db:migrate` creates and applies a development migration. `db:deploy` applies already committed migrations in hosted environments. `db:check` makes harmless queries that confirm the `SavedBook` table is available and report whether row-level security is enabled. `db:check-library` creates and removes one reserved temporary record while checking duplicate handling, status filtering, and owner isolation. Neither command prints a connection string.
-
-## Understanding this starter
-
-- `src/app/layout.tsx` is the shared HTML document, metadata, header, and footer. The `children` prop is where the active page renders.
-- `src/app/page.tsx` is the `/` route. React components describe the interface in JSX; TypeScript checks types before execution. App Router components are Server Components by default. This static page needs no client state or effects.
-- `src/app/globals.css` provides plain CSS, an ivory/forest palette, system serif/sans-serif fonts, responsive layouts, keyboard focus styling, and reduced-motion support. System fonts avoid build-time font downloads.
-- `src/app/icon.svg` provides Folio's browser icon.
-- `next.config.ts`, `tsconfig.json`, and `eslint.config.mjs` configure Next.js, strict type checking, and lint rules.
-
-Next.js runs on Node.js during development and production serving. Server Components read the authenticated library, while Node.js Route Handlers validate and apply mutations. A separate backend server is unnecessary for this scope.
-
-## npm learning guide
-
-| Item | Purpose |
+| Variable | Purpose |
 | --- | --- |
-| `package.json` | Names the project, declares direct dependencies, runtime expectations, and executable scripts. |
-| `package-lock.json` | Records exact resolved dependency versions and integrity hashes, including transitive dependencies. Commit it so installs are reproducible. |
-| `node_modules/` | Local installed packages. Generated by npm, large, and sometimes platform-specific; never commit it. |
-| `npm install` | Installs dependencies; adding or changing a package updates the manifest and lockfile. |
-| `npm ci` | Installs the locked dependency tree, replacing existing `node_modules`; fails if manifest and lockfile disagree. Use for clean clones and CI. |
-| `npm run dev` | Runs the `dev` script: Next.js development server with automatic updates. |
-| `npm run build` | Compiles and prepares the production application. |
-| `npm run start` | Serves an already-built production application. |
-| `npm uninstall <package>` | Removes an unneeded direct dependency and updates both package files. |
-| npm scripts | Named commands under `scripts`; npm makes local package executables available automatically. |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk's browser-visible publishable key |
+| `CLERK_SECRET_KEY` | Clerk's server-only secret key |
+| `DATABASE_URL` | Supabase transaction pooler on port 6543 for application queries |
+| `DIRECT_URL` | Supabase session/direct connection on port 5432 for Prisma migrations |
+| `OPEN_LIBRARY_CONTACT_EMAIL` | Optional contact in the server-side Open Library User-Agent |
 
-Direct dependencies are packages listed in this project's manifest. Transitive dependencies are packages those dependencies require. Runtime dependencies power the app; development dependencies provide build, type, and lint tooling. A platform still needs development dependencies during its build step.
+Apply the committed schema and verify connectivity:
 
-An exact version such as `16.4.0` pins a direct dependency. A caret such as `^16.4.0` permits compatible minor/patch releases; a tilde permits patches within a minor version. The lockfile records the actual selected tree. This project pins direct packages for explicit upgrades.
-
-For compatibility problems, read the actual npm error, check `node --version`, `npm --version`, and `npm ls`, then inspect the affected package's `engines` and `peerDependencies` with `npm view`. Compare with official documentation. Do not suppress conflicts with `--force` or `--legacy-peer-deps`; resolve the conflicting constraints, review the lockfile diff, and rerun checks.
-
-## Planned stack and architecture
-
-| Technology | Role | Status |
-| --- | --- | --- |
-| Next.js App Router, React, TypeScript | Pages, components, typed application code | Implemented |
-| Standard CSS | Responsive visual design | Implemented |
-| Node.js | Server runtime | Used locally |
-| npm | Dependency installation and scripts | Implemented |
-| Open Library | Real book discovery through a server-side integration | Implemented |
-| Clerk | Sign-in, sign-up, account UI, server-verified identity | Implemented and verified locally |
-| Prisma 7.10 | Typed database access and version-controlled migrations | Implemented |
-| Supabase PostgreSQL | Persistent relational storage; no Supabase Auth | Implemented and verified |
-| Vercel Hobby | Next.js hosting | Phase 8 |
-
-Architecture:
-
-```text
-Browser → React / Next.js → server logic → Prisma → Supabase PostgreSQL
-Next.js server → Open Library Search API → normalized book results
-Clerk → server-verified identity → owner-scoped queries → personal records
-```
-
-Saved books store their own metadata, so reading an existing library does not require Open Library. A compound uniqueness constraint prevents duplicate books per user. All personal reads and writes derive the user ID from Clerk on the server, never from a browser-submitted owner ID.
-
-## Development checkpoints
-
-1. **Project setup:** branded starter, toolchain, local verification.
-2. **Book discovery:** real searches, covers, detail view, loading/error states.
-3. **Clerk authentication:** supported components and private route protection.
-4. **Database:** Supabase connections, Prisma schema, migrations, connectivity.
-5. **Personal library:** persistent saves/removal, statuses, filters, counts.
-6. **Ratings and notes:** validated updates and persistence.
-7. **Testing and refinement:** isolation, accessibility, responsive behavior, build.
-8. **Documentation and deployment:** researched comparisons, Vercel verification, video checklist, submission issue draft.
-
-Each phase ends with verification, explanation, and an owner-controlled Git commit before the next phase begins. The repository owner makes all commits and pushes.
-
-## External configuration checkpoints
-
-- **Phase 3:** The Clerk CLI created and linked the **Folio** development application and pulled its keys into ignored `.env.local`. Another developer can use `npx clerk@latest init` followed by `npx clerk@latest env pull`, or copy development keys from the [Clerk Dashboard](https://dashboard.clerk.com/) API Keys page. Never send secret keys in chat.
-- **Phase 4:** Create a free project in the [Supabase Dashboard](https://supabase.com/dashboard). Put its transaction-pooler URL (port 6543) in `DATABASE_URL` and its session-pooler URL (port 5432), or direct URL when IPv6 is available, in `DIRECT_URL`. Keep both in ignored `.env.local`. `prisma.config.ts` prefers `DIRECT_URL` for migrations while the application client uses `DATABASE_URL`.
-- **Phase 8:** After the owner pushes the code, import the repository in the [Vercel Dashboard](https://vercel.com/new), select Hobby, configure environment variables and Clerk's deployment domain, apply migrations, and verify the deployed site. Deployment has not happened yet.
-
-Real environment files are ignored by Git. Only explicitly public variables may use `NEXT_PUBLIC_`; database URLs and Clerk secret keys remain server-only.
-
-## Research notes and sources
-
-Reviewed official documentation and npm version/peer-dependency metadata during setup:
-
-- [Next.js installation](https://nextjs.org/docs/app/getting-started/installation): App Router setup, minimum runtime, separate build/lint scripts.
-- [Clerk Next.js quickstart](https://clerk.com/docs/nextjs/getting-started/quickstart): supported authentication integration for the upcoming phase.
-- [Supabase with Prisma](https://supabase.com/docs/guides/database/prisma): PostgreSQL adapter and separate pooler/migration configuration.
-- [Prisma connections](https://www.prisma.io/docs/orm/v7/prisma-client/setup-and-configuration/databases-connections): connection lifecycle considerations.
-- [Vercel Node versions](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions): supports Node 24 and 22; project targets 24.
-
-Actual setup findings: the machine's default Node was 23.5.0, so checks use an isolated temporary Node 24 runtime without changing the system installation. npm registry access initially failed inside the restricted environment; approved network access allowed version lookups and installation. Prisma's `latest` npm tag pointed to an 8.0 release candidate during research; Prisma is deferred to Phase 4, where a stable version will be selected explicitly rather than blindly installing `latest`.
-
-Technology comparisons, service limits, integration findings, and demo/submission material will be expanded as the corresponding work is completed. No integration or deployment results are claimed at this stage. If the course requires an AI-use statement, document the actual assistance and the owner's review, testing, and understanding before submission.
-
-## Phase 4: Prisma and Supabase PostgreSQL
-
-### Data model and ownership boundary
-
-`SavedBook` stores a stable Open Library work key together with the title, author, optional cover/year metadata, reading status, optional rating and notes, and timestamps. The composite unique constraint on `(clerkUserId, openLibraryKey)` prevents one account from saving the same work twice while allowing another account to save it independently. An index on `(clerkUserId, status)` supports the owner-scoped status views planned for Phase 5.
-
-The database enum limits status to `WANT_TO_READ`, `READING`, or `FINISHED`. The migration also adds a PostgreSQL check constraint so a non-null rating must be between 1 and 5. Prisma does not model check constraints in its schema language, so the versioned SQL migration is the source of truth for that rule. Phase 5 and 6 server operations will obtain `clerkUserId` from Clerk's server-side `auth()` result; no library operation will trust an owner ID sent by the browser.
-
-### Connection design
-
-Prisma 7 uses the `@prisma/adapter-pg` driver adapter. `src/lib/prisma.ts` keeps one client during development reloads and creates a normal process-scoped client in production. The runtime client reads only `DATABASE_URL`. The Prisma CLI reads `DIRECT_URL` first so migration commands use a connection that supports sessions; it falls back to `DATABASE_URL` for conventional PostgreSQL environments.
-
-The generated Prisma client lives under ignored `src/generated/prisma/`. `postinstall` regenerates it after a clean dependency install, while `db:generate` provides an explicit command. Generated code is reproducible from the committed schema and Prisma version and does not belong in Git.
-
-The schema migration is committed under `prisma/migrations/20261011000000_initialize_saved_books/`, followed by a small migration that records row-level security in version control. Future model changes require a new migration; `prisma db push` is not the project workflow because it does not provide the same reviewable migration history.
-
-### Configuration and verification
-
-Copy the two empty database variables from `.env.example` into ignored `.env.local`, paste the URLs from Supabase's Connect dialog, and percent-encode any password characters that have special meaning in a URL. Then run:
-
-```sh
+```bash
+npm run deploy:check
 npm run db:deploy
 npm run db:status
 npm run db:check
 ```
 
-The deploy command applies committed migrations, status checks migration history, and the final command verifies both PostgreSQL connectivity and the generated Prisma model. The connectivity script reports only the database/schema names and row count, never credentials.
+Start the application and open [http://localhost:3000](http://localhost:3000):
 
-The live Phase 4 project uses Supabase's shared transaction pooler on port 6543 for application traffic and its session pooler on port 5432 for migrations. Both migrations were deployed successfully: Prisma reports the database schema is current, `SavedBook` is queryable, and row-level security is enabled on the table. Prisma's migration history under `prisma/migrations/` remains the schema source of truth. Supabase's GitHub integration expects Supabase CLI migrations under a different directory, so this project does not duplicate the schema in a second migration system.
-
-Official references reviewed for this integration:
-
-- [Supabase: Connecting with Prisma](https://supabase.com/docs/guides/database/prisma)
-- [Prisma schema overview](https://www.prisma.io/docs/orm/v7/prisma-schema/overview)
-- [Prisma PostgreSQL connector](https://www.prisma.io/docs/orm/overview/databases/postgresql)
-
-### Phase 4 verification results
-
-- `prisma migrate deploy`: both committed migrations applied successfully to the Supabase project.
-- `prisma migrate status`: database schema is up to date.
-- `npm run db:check`: connected to the `postgres` database in the `public` schema; `SavedBook` was queryable with zero initial rows and row-level security enabled.
-- `npm test`: all seven test groups passed.
-- `npm run lint`, `npm run typecheck`, and `npm run build`: passed with the configured Clerk and Supabase environment.
-- Browser: signed-out navigation contains one **My library** link and no Discover link or search form; the public account CTA remains available. Signed-in rendering goes directly to the completion-enabled discovery desk without the former welcome-back hero.
-- `.env.local` remains ignored and no database credential is tracked.
-
-## Phase 5: Personal library
-
-### Request and ownership flow
-
-The library page is a Server Component. It calls `auth.protect()`, obtains the verified Clerk user ID, and passes that ID to the server-only data layer. Prisma reads only rows whose `clerkUserId` matches that session. The page runs its filtered book query and grouped status-count query in parallel, returning only the fields the client components render.
-
-Saving, status changes, and removal use Node.js Route Handlers under `/api/library`. Each handler authenticates the request again because hiding a control in React is not an authorization boundary. Inputs are treated as unknown, normalized, and length-checked. Update and delete queries include both the record ID and server-derived Clerk ID, so another user's valid record ID still cannot be changed. The browser never submits an owner ID.
-
-Saving uses the database's compound unique key with an upsert that has an empty update. Repeated saves therefore return the existing record instead of adding a duplicate or replacing trusted saved metadata. New records use the schema default `WANT_TO_READ` status.
-
-### Phase 5 verification results
-
-- `npm test`: all nine test groups passed, including saved-book validation, status/filter parsing, and UUID validation.
-- Signed-out `POST /api/library`: returned `401` and created no record.
-- `npm run db:check-library`: live Supabase create, duplicate handling, owner-scoped update rejection, status filtering, own update, and removal all passed; cleanup ran in `finally`.
-- `npm run lint`, `npm run typecheck`, and `npm run build`: passed. The production build includes `/api/library`, `/api/library/[id]`, and the dynamic `/library` page.
-- Signed-out browser: public introduction rendered without Discover or search controls. The authenticated browser session rendered the completion-enabled discovery page with one **My library** link before its existing tab stopped repainting after the production server restart; persistence behavior was verified through the live integration check rather than claimed as a completed browser mutation cycle.
-
-## Phase 1 manual review (historical checkpoint)
-
-- Open the home page and confirm Folio's title, header, illustration, and development notice.
-- Click “Meet Folio” and “About Folio”; both navigate to the introduction section.
-- Use Tab to reveal the skip link and check visible link focus.
-- Check a narrow mobile viewport and a desktop viewport for clipping and readable text.
-- Confirm the page offers no operational-looking search, save, or sign-in controls yet.
-
-Integration and authorization tests belong to later phases once those features exist.
-
-## Phase 1 verification results
-
-Executed with isolated Node **24.21.0** and npm **10.9.2**:
-
-- `npm ci`: completed successfully from the lockfile.
-- `npm run lint`: passed.
-- `npm run typecheck`: passed.
-- `npm run build`: passed; `/` and the icon were prerendered successfully.
-- Development server: started successfully on `http://127.0.0.1:3000` after allowing the local listener outside the restricted execution environment.
-- Browser: home page and metadata rendered; both introduction links navigated to `#about`; keyboard focus was visible; the skip link appeared at the top and moved focus to `main-content`.
-- Responsive review: desktop and 390px mobile views inspected; mobile document width did not exceed viewport width.
-- Browser console: no captured warning/error messages during this review.
-- `npm audit --omit=dev`: zero production dependency vulnerabilities at verification time.
-
-### Tooling limitations to revisit
-
-Next's installed lint plugins declare support for ESLint 9 but not ESLint 10, and its TypeScript lint tooling requires TypeScript below 6.1. The initially installed latest releases produced peer conflicts. Pinning **ESLint 9.39.5** and **TypeScript 6.0.3** resolved those conflicts and all code checks passed. npm marks ESLint 9 as no longer supported; revisit the compatible set when Next's plugin dependencies update.
-
-The full `npm audit` still reports **five high-severity entries** from the same transitive `braces` advisory through the development-only lint dependency chain (`braces` → `micromatch` → `fast-glob` → Next's ESLint plugin/config). npm proposes an incompatible downgrade to Next 14 lint configuration; it was not applied. The audit is not clean, despite the clean production-only audit. Track [the braces advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) and upstream compatible fixes.
-
-Next also reports that it ignored an unrelated lockfile outside this repository; the Folio build succeeds using its own lockfile. Next automatically generated `AGENTS.md` with guidance for future tooling; it does not affect the product. npm lists two optional Sharp/WASM support packages as extraneous, including after `npm ci`; installation, lint, type checking, and build still succeed.
-
-
-## Phase 2: book discovery
-
-### What changed and why
-
-`BookSearch.tsx` is a Client Component because it handles form events, loading state, and selected-book state. The page and layout stay Server Components. A TypeScript discriminated union gives the search one explicit state at a time: idle, loading, success, or error. React renders upstream text safely without inserting HTML.
-
-The flow is:
-
-```text
-Submit title/author → GET /api/books/search?q=… → validate query
-→ server fetch to Open Library → normalize unknown JSON → Book[]
-→ React book cards → accessible native detail dialog
+```bash
+npm run dev
 ```
 
-- `src/lib/books.ts`: shared book type, 120-character query validation, and 12-result limit.
-- `src/lib/open-library.ts`: fixed HTTPS search endpoint, explicit fields, validation/normalization, deduplication by work ID, 10-second upstream timeout, and safe errors. It is imported only by the server route (and tests), not the client UI.
-- `src/app/api/books/search/route.ts`: Node.js Route Handler using standard Request/Response APIs. Invalid queries return 400, throttling returns 429 with Retry-After, upstream failures return 502, and timeouts return 504.
-- `src/components/BookSearch.tsx`: submit-only searches, a duplicate-request guard, 15-second browser timeout, and cancellation on unmount. No automatic retries or per-keystroke requests.
-- `BookCard.tsx`, `BookCover.tsx`, `BookDetails.tsx`: reusable display components. A native `<dialog>` manages modal focus and Escape. Details reuse existing search metadata, so opening one does not fetch another record.
+Use `localhost`, rather than the numeric loopback address, for the local Clerk flow.
 
-Cover URLs use validated positive numeric IDs and a fixed Covers API host. Next Image uses the API's already-sized medium covers directly (`unoptimized`), preserving lazy loading and avoiding a second image transformation service. Remote patterns document the allowed source; the numeric-ID construction is what constrains these direct image URLs. Missing/failed images show a readable CSS cover. `?default=false` requests an HTTP error instead of Open Library's blank image when a cover is unavailable.
+## Commands
 
-The first 12 matches are intentionally sufficient for this milestone. Refine a search for more specific results; no pagination or background prefetching is implemented. Searches and selected details are temporary UI state and reset on refresh. No saved-library functionality is simulated.
+| Command | Purpose |
+| --- | --- |
+| `npm ci` | Recreate the exact dependency tree from `package-lock.json` |
+| `npm run dev` | Start the Next.js development server |
+| `npm test` | Run the lightweight Node test suite |
+| `npm run lint` | Run ESLint across the repository |
+| `npm run typecheck` | Generate route types and run TypeScript without emitting files |
+| `npm run build` | Create the production Next.js build |
+| `npm run start` | Serve an existing production build |
+| `npm run db:generate` | Regenerate Prisma Client from the schema |
+| `npm run db:migrate -- --name change_name` | Create and apply a development migration |
+| `npm run db:deploy` | Apply committed migrations without creating new ones |
+| `npm run db:check-library` | Exercise duplicate, filter, ownership, update, and cleanup behavior |
+| `npm run deploy:check` | Validate deployment variable structure without printing secrets |
 
-### Open Library configuration and usage
+## API surface
 
-The [Search API](https://openlibrary.org/dev/docs/api/search), [Covers API](https://openlibrary.org/dev/docs/api/covers), and [usage policy](https://openlibrary.org/developers/api) were checked before implementation. Only the five requested metadata fields are fetched. API response caching uses Next's data cache with a one-hour revalidation window. Cache misses still depend on upstream availability; successful cached content may be served during revalidation.
+| Method and route | Behavior |
+| --- | --- |
+| `GET /api/books/search?q=...` | Validates a query, calls Open Library, and returns normalized books |
+| `POST /api/library` | Saves a book once for the authenticated reader |
+| `PATCH /api/library/:id` | Updates that reader's status, rating, or notes |
+| `DELETE /api/library/:id` | Removes that reader's saved book |
 
-Open Library specifies a default limit of one request per second and requests application identification plus contact details for regular usage. Set `OPEN_LIBRARY_CONTACT_EMAIL` in your ignored `.env.local` to an email you consent to send to Open Library in the server User-Agent. It is optional for occasional local testing; no email has been copied from Git configuration. Restart the server after changing it. No API key, paid service, or extra npm package is needed. The policy page also links an application registration form for the owner to review before regular public usage.
+Library endpoints return `401` without a session. Updates and deletes include both the record UUID and verified owner ID, so knowing another record's ID is insufficient to modify it.
 
-The browser and server enforce a 1.1-second gap between search starts. The server guard is **per running instance**, not a global or distributed limiter. It resets on cold starts and does not coordinate multiple Vercel instances. This is appropriate only for low-volume milestone testing; revisit shared rate control before public usage grows. It must not be described as a guarantee of aggregate compliance under serverless scaling. Identified traffic still uses the conservative gap.
+## Technology research and comparisons
 
-### Automated tests
+These comparisons reflect Folio's scope. Each alternative can be a sound choice under different constraints.
 
-`npm test` uses Node 24's built-in test runner and TypeScript stripping; no test framework dependency was added. Imports in tests/server helpers have explicit `.ts` extensions, with `allowImportingTsExtensions` enabled under the existing no-emit TypeScript setup. `type: module` explicitly declares ES module syntax for Node.
+| Comparison | Advantages and limitations | Why Folio uses the selected option |
+| --- | --- | --- |
+| **Next.js vs Vite + React** | Next.js combines routing, server rendering, Route Handlers, and deployment conventions, but adds server/client boundaries and framework conventions. Vite gives a smaller client-focused setup and flexible backend choices, but Folio would need a separate API and routing design. | Next.js keeps the interface and authenticated server logic in one repository and one Vercel deployment. |
+| **React vs Vue** | React has a broad ecosystem and fits Next.js directly, while requiring deliberate state and effect design. Vue offers approachable templates and integrated reactivity, but would replace the required Next.js/React stack. | React is the rendering model supported by the selected full-stack framework and Clerk components. |
+| **Node.js vs a separate Python backend** | Node lets client and server share TypeScript types and one build. CPU-heavy work is not its focus. Python has excellent data tooling, but a separate service would add another runtime, deployment, API boundary, and dependency system. | Folio's work is I/O-heavy and modest, so Next.js Route Handlers on Node are sufficient. |
+| **Clerk vs Supabase Auth** | Clerk provides hosted account UI and current Next.js helpers, with an external service dependency and production-domain configuration. Supabase Auth can consolidate services, but was outside the required architecture and would couple identity to the database provider. | Clerk satisfies the course stack and supplies a server-verifiable identity without custom password code. |
+| **PostgreSQL vs MongoDB** | PostgreSQL supplies constraints, transactions, enums, indexes, and relational querying; schema changes require migrations. MongoDB offers flexible documents and can suit rapidly varying records, but application code must still protect consistency. | A saved book has stable structured fields, uniqueness, and rating rules that map clearly to PostgreSQL. |
+| **Prisma vs raw SQL** | Prisma generates typed queries and reviewable migrations, but adds generated code, a driver adapter, and ORM-specific concepts. Raw SQL exposes full database behavior and can be leaner, but requires manual result typing and more repetitive query handling. | Prisma reduces type drift across TypeScript and PostgreSQL while leaving SQL migrations inspectable. |
+| **Vercel vs Render** | Vercel provides first-class Next.js builds, previews, and serverless functions, with platform limits and serverless connection concerns. Render is flexible for long-running services, but a persistent server is unnecessary here. | Folio is one Next.js app, so Vercel offers the shortest supported deployment path. |
+| **npm vs pnpm** | npm ships with Node and has a familiar lockfile and broad compatibility, though `node_modules` can use more disk space. pnpm is efficient and strict about dependency access, but adds another package-manager requirement. | npm is required by the milestone and `npm ci` gives reproducible installs from the committed lockfile. |
 
-Tests cover blank/long queries, whitespace normalization, missing/malformed fields, invalid work IDs, duplicate records, result limits, empty results, fixed-host URL construction, encoded input, cache/timeout settings, upstream 429/500 responses, network failures, malformed JSON, and timeouts. The Route Handler is also exercised with mocked upstream fetch to verify validation, normalization, rate limiting, and HTTP errors. Mocks are used only in tests; there are no production fixtures or test-only API routes.
+## npm findings
 
-### Manual verification checklist
+`package.json` lists Folio's direct dependencies, scripts, project metadata, and Node expectation. `package-lock.json` records exact resolved versions, integrity hashes, and transitive dependencies, so it is committed and `npm ci` can reproduce the same tree. `node_modules/` contains generated, platform-local package files and is ignored.
 
-1. Start with Node 24 and `npm run dev`; open the home page and click **Discover books**.
-2. Submit an empty search: expect a clear validation message.
-3. Search **The Hobbit**: expect real book cards with covers, title, author, and year.
-4. Open a card; check metadata and the Open Library link. Tab through the dialog, close using Escape and the Close button, and check focus returns to the card.
-5. Search **Toni Morrison** to check author discovery.
-6. Search an unlikely random string to check the no-results guidance.
-7. Inspect mobile cards and dialog at a 390px viewport.
-8. Run `npm test`, `npm run lint`, `npm run typecheck`, and `npm run build`.
+`npm install` resolves dependencies and updates the lockfile when the manifest changes. `npm ci` removes the existing installed tree and accepts only a lockfile that agrees with the manifest, which makes it appropriate for clean clones and CI. `npm uninstall <package>` removes a direct dependency and updates both package files. `npm run <name>` executes a named script with local package executables on its path.
 
-### Actual issue resolved
+A direct dependency is explicitly listed by Folio; a transitive dependency is required by one of those packages. Exact versions pin direct packages deliberately, while the lockfile pins the complete resolved graph. When compatibility fails, inspect the actual error, Node/npm versions, `npm ls`, package `engines`, and `peerDependencies`; compare official release documentation; then make the smallest compatible version change and rerun the complete checks. Folio does not hide peer conflicts with `--force` or `--legacy-peer-deps`.
 
-Browser testing found that React Strict Mode's effect replay closed and reopened the native dialog, then delivered a queued close event that cleared the selected book. The close handler now ignores that event when the dialog is already open. This keeps development behavior correct without disabling Strict Mode.
+## Research findings and resolved challenges
 
+- **Server verification is the authorization boundary.** Hiding controls in React cannot protect data. Every private operation obtains Clerk's session on the server and scopes its query to that identity.
+- **Next.js 16 uses `proxy.ts`.** The installed documentation confirmed the current convention; older tutorials referring only to `middleware.ts` were not copied blindly.
+- **Server and Client Components have distinct jobs.** Library reads remain server-side, while browser state is limited to interactions such as filtering, dialogs, optimistic controls, and editing.
+- **External JSON is untrusted.** Open Library fields are narrowed and normalized before rendering. A fixed URL builder, timeout, caching, restrained fields, and clear failures keep the integration bounded.
+- **Fast search needs ordering guarantees.** Debouncing alone does not prevent an older response from replacing a newer query. Folio aborts obsolete requests and checks the active request before updating state.
+- **Prisma 7 requires explicit connection design.** The application uses `@prisma/adapter-pg`; migrations use `DIRECT_URL`, while runtime traffic uses the transaction pooler in `DATABASE_URL`. Prisma Client is regenerated during `postinstall` for Vercel.
+- **RLS does not replace application authorization here.** RLS is enabled without public policies. The trusted Prisma server connection performs owner-scoped queries using the verified Clerk ID.
+- **Clerk development hosts must agree.** Using `localhost` consistently fixed a development handshake that redirected away from a server bound only to `127.0.0.1`.
+- **Generated route types are shared build artifacts.** Type generation and production builds are run sequentially so concurrent writes under `.next` cannot create misleading duplicate declarations.
 
-### Phase 2 verification results
+Free tiers also shape the design. Open Library asks clients to identify regular usage and respect its rate policy. Serverless instances cannot provide one global in-memory rate limit. Supabase has connection limits, so Vercel traffic uses its transaction pooler. Clerk development instances are suitable for a course demo; a true production instance requires the deployed custom domain and live keys. Vercel applies changed environment variables only to new deployments.
 
-Executed on Node 24.21.0:
+## Testing
 
-- Six automated test groups passed (`npm test`), including simulated upstream failures and HTTP timeout behavior.
-- ESLint, TypeScript, production build, and Git whitespace checks passed. Build output includes the dynamic `/api/books/search` route.
-- Live browser title search: **The Hobbit** returned 12 cards, including Tolkien's 1937 work; its real cover rendered. Another result exercised the missing-cover and unknown-author fallbacks.
-- Live browser author search: **Toni Morrison** returned 12 cards including **Beloved** and **The Bluest Eye**.
-- Empty submission displayed validation; the live query `zzqfolio947281nonexistentbook` displayed the no-results guidance. Loading text and the disabled submit button were observed during requests.
-- Details opened with correct selected metadata, closed via both Close and Escape, and restored focus to the originating card.
-- At 390px, cards and the detail dialog did not overflow horizontally. Mobile cover images completed loading; the dialog used a single-column layout.
-- No browser warning/error logs were captured in the working localhost tab. API outages were simulated in automated tests, not induced against the live service or claimed as browser-tested outages.
+The automated suite covers search input and normalization, Open Library failures and timeouts, typo matching and suggestions, auth configuration, saved-book validation, duplicate behavior, status/filter parsing, UUIDs, ratings, and notes. Live database checks create reserved temporary records and clean them up in `finally` while testing duplicate handling, owner isolation, filters, updates, and deletion.
 
-The previous preview tab failed to reconnect through its numeric loopback URL; a fresh `http://localhost:3000` tab worked with the existing server. An attempted second dev server correctly refused the occupied project lock; the existing server was retained.
+The completed local verification includes:
 
-The Phase 1 toolchain audit limitations remain recorded above. No dependencies or lockfile entries changed in Phase 2. Open Library metadata can itself contain inaccurate years; Folio validates field types and displays the supplied data without claiming to fact-check it.
+- real Open Library searches, missing-field fallbacks, no-result handling, and detail-dialog keyboard behavior;
+- real Clerk sign-up/sign-in, signed-out library redirect, account controls, and sign-out;
+- Supabase migrations, connectivity, row-level-security status, persistence operations, and owner isolation;
+- desktop and 390-pixel responsive review;
+- ESLint, TypeScript, automated tests, and a production build.
 
-## Phase 3: Clerk authentication
+Deployment is prepared but is not claimed as successful until the public URL passes the checklist in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-### Architecture and authorization
+The current full npm audit reports nine high-severity entries across transitive Prisma CLI and Next.js ESLint dependency chains; four Prisma-chain entries are still reported with `--omit=dev`. They include tooling that Folio does not invoke in a request path and a MySQL driver Folio does not use, but the audit is not clean. npm proposes breaking downgrades of Prisma and the Next.js lint configuration, so those changes were not applied without upstream-compatible fixes. Recheck the advisories during dependency upgrades.
 
-Folio uses `@clerk/nextjs` 7.9.14, selected after checking its Node, Next.js, and React peer ranges. `src/proxy.ts` follows the Next.js 16 `proxy.ts` convention and runs Clerk's request middleware whenever both keys are configured. The proxy establishes session context; it does not act as the sole authorization layer.
+## Deployment
 
-The private flow is:
+Folio needs no custom `vercel.json`. The repository declares Node 24, runs `prisma generate` in `postinstall`, uses a serverless-safe database pooler, and includes a secret-safe preflight command. Follow [the Vercel deployment guide](docs/DEPLOYMENT.md) to apply migrations, import the GitHub repository, add environment variables, select the correct Clerk mode, deploy, and verify the public application.
 
-```text
-Browser request → Clerk proxy verifies session context
-→ /library calls auth.protect() on the server
-→ signed-out visitor redirects to /sign-in
-→ signed-in visitor receives private page content
-```
+No public URL is listed yet because the hosted application has not been validated.
 
-The library page protects itself because authorization belongs beside the private resource. Future database queries and mutations will also call Clerk's async server helper and use its verified `userId`; they will never accept an owner ID from the browser. This follows Clerk's current resource-level guidance and avoids its deprecated route-matcher protection pattern.
+## Demonstration and submission
 
-`ClerkProvider` lives inside `<body>` and is activated only when a valid-looking publishable/secret key pair exists. Public discovery remains available while signed out. The header uses Clerk's sign-in, sign-up, and user-account controls, with one consistent **My library** link in both session states. Catch-all `/sign-in` and `/sign-up` pages support Clerk's multi-step flows and return successful authentication to `/library`.
+[docs/DEMO.md](docs/DEMO.md) contains a concise recording sequence and a ready-to-fill GitHub Issue body. The issue is intentionally not created by this repository work because the course instructions require the owner to add the final repository URL, video link, course mentions, and submit it explicitly.
 
-The home page reads only the server-verified session boolean. Signed-in readers receive a distinct welcome hero and discovery desk with native search completions and prompt buttons. Those completions are a small local list and do not issue per-keystroke network requests; Open Library is still contacted only after the user submits a search.
+## AI usage
 
-When keys are absent, Folio deliberately renders `AuthSetup` instead of initializing Clerk. This keeps a clean clone buildable, makes missing external configuration explicit, and does not fake an authenticated session. The placeholder library contains no personal data and is shown only after `auth.protect()` when Clerk is configured.
+OpenAI Codex assisted with documentation research, implementation drafts, code review, test execution, and troubleshooting. The repository owner controls commits, service configuration, deployment, and submission, and is responsible for reviewing and understanding the code. This statement should be adjusted if the course requires a specific disclosure format.
 
-### Configure Clerk locally
+## References
 
-1. Run `npx clerk@latest init`, authenticate in the browser, and create or select an application named **Folio**.
-2. Run `npx clerk@latest env pull` to write the linked development keys to ignored `.env.local`. Alternatively, copy them from the [Clerk Dashboard](https://dashboard.clerk.com/) API Keys page without pasting either key into chat.
-3. If configuring manually, create the ignored local file:
+- [Next.js documentation](https://nextjs.org/docs)
+- [Clerk Next.js documentation](https://clerk.com/docs/reference/nextjs/overview)
+- [Prisma ORM documentation](https://www.prisma.io/docs/orm)
+- [Supabase: Prisma](https://supabase.com/docs/guides/database/prisma)
+- [Open Library Search API](https://openlibrary.org/dev/docs/api/search)
+- [Open Library API usage guidelines](https://openlibrary.org/developers/api)
+- [Vercel: Next.js](https://vercel.com/docs/frameworks/full-stack/nextjs)
 
-   ```sh
-   cp .env.example .env.local
-   ```
-
-4. In `.env.local`, fill these two values from Clerk. The application supplies its auth route configuration directly, so these are the only required secrets:
-
-   ```env
-   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-   CLERK_SECRET_KEY=sk_test_...
-   ```
-
-5. Stop and restart `npm run dev`; environment changes are loaded at server startup.
-6. Visit `/sign-up`, create a test account, and confirm the profile control appears. Open `/library`, sign out, and revisit `/library` to confirm it redirects to `/sign-in`.
-
-`.env.local` is ignored by Git. The publishable key is intentionally browser-visible; the secret key is server-only. Do not prefix the secret with `NEXT_PUBLIC_`, expose it through props, log it, commit it, or use a production key during local milestone work.
-
-### Phase 3 verification results
-
-Completed with the linked Clerk development instance:
-
-- Seven automated test groups passed, including key-pair activation checks and all Phase 2 integration logic.
-- ESLint, TypeScript, `git diff --check`, and the production build passed.
-- The build generated `/library`, catch-all sign-in/sign-up pages, and the Next.js proxy.
-- `npx clerk@latest doctor` confirmed the CLI login, linked Folio application, reachable development instance, and both ignored local keys without printing their values.
-- Browser review confirmed the real Clerk sign-up and sign-in widgets load, including email/password and Google options.
-- A signed-out request to `/library` redirects to `/sign-in` and preserves `/library` as the return URL.
-- The no-key fallback was separately checked: it displays setup instructions and usable navigation instead of crashing.
-- Chrome verification completed a real Google sign-in, showed the Clerk user account control, and rendered `/library` only after the server verified the session.
-- Signing out returned to the public home page; revisiting `/library` redirected to the real sign-in page with the library return URL preserved.
-- Follow-up browser review confirmed the authenticated header contains one **My library** link, the signed-in discovery design differs visibly from the public page, a completion prompt fills the search field, and submitting **Beloved** returns real Open Library results.
-- A separate signed-out browser session confirmed the original public discovery experience remains available without member prompts or completions.
-
-Use `http://localhost:3000` for local Clerk testing. Binding the server only to `127.0.0.1` caused Clerk's development handshake to canonicalize back to `localhost` and left Next.js proxying to the wrong listener. The explicit Turbopack root also prevents an unrelated lockfile above the repository from making Next.js watch the wrong workspace.
-
-Database-backed user records are intentionally deferred to Phases 4 and 5.
+The organization of this README was informed by the research format in the team's [PlayState milestone repository](https://github.com/maximusf/PlayState); Folio's content, findings, architecture, and verification record describe this project.

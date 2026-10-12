@@ -18,7 +18,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:status": "prisma migrate status"
+    "db:status": "prisma migrate status",
+    "deploy:check": "tsx scripts/check-deployment-env.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.14",
