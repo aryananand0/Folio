@@ -6,6 +6,8 @@ Folio is a personal reading library built for a university Computer Science rese
 
 **Live application:** [folio-three-mocha.vercel.app](https://folio-three-mocha.vercel.app)
 
+**Demonstration video:** [Watch the Folio research milestone demonstration on YouTube](https://youtu.be/zIMoVq7zCXA)
+
 ![Folio's desktop home page with its editorial book artwork](docs/images/folio-home.jpg)
 
 ![Folio's discovery, collection, and reading-memory feature overview](docs/images/folio-features.jpg)
@@ -233,11 +235,7 @@ Folio is deployed at [folio-three-mocha.vercel.app](https://folio-three-mocha.ve
 
 ## Demonstration and submission
 
-[docs/DEMO.md](docs/DEMO.md) contains a concise recording sequence and a ready-to-fill GitHub Issue body. The issue is intentionally not created by this repository work because the course instructions require the owner to add the final repository URL, video link, course mentions, and submit it explicitly.
-
-## AI usage
-
-OpenAI Codex assisted with documentation research, implementation drafts, code review, test execution, and troubleshooting. The repository owner controls commits, service configuration, deployment, and submission, and is responsible for reviewing and understanding the code. This statement should be adjusted if the course requires a specific disclosure format.
+[docs/DEMO.md](docs/DEMO.md) contains the recording sequence and a GitHub Issue body with the verified repository, live application, and demonstration-video links. Add the required course-staff mentions before submitting the Issue in the team repository.
 
 ## References
 
