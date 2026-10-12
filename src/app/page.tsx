@@ -37,7 +37,7 @@ export default async function Home() {
           <article><span className="feature-number">02 / COLLECT</span><h3>Make room on your shelf.</h3><p>Keep the books you want to read, are reading, and have finished in one personal library.</p></article>
           <article><span className="feature-number">03 / REMEMBER</span><h3>Keep what stays with you.</h3><p>Record a rating and your own notes, ready to revisit after the last page.</p></article>
         </div>
-        <aside className="development-note" aria-label="Development status"><span className="status-dot" aria-hidden="true" /><p><strong>The first chapter is underway.</strong> Book discovery and private accounts are ready. Persistent personal libraries, ratings, and notes are coming in upcoming milestones.</p></aside>
+        <aside className="development-note" aria-label="Development status"><span className="status-dot" aria-hidden="true" /><p><strong>The first chapter is underway.</strong> Book discovery, private accounts, and persistent reading shelves are ready. Ratings and notes arrive in the next milestone.</p></aside>
       </section>
     </main>
   );

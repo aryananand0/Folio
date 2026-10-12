@@ -6,7 +6,7 @@ Folio is an individual Computer Science capstone research project: a personal re
 
 ## Current milestone
 
-Phase 4 adds the Supabase PostgreSQL data model, Prisma client, versioned migration, and a live connection check. Book discovery is now available only after sign-in; signed-out visitors see the public introduction and account entry points. Persistent library actions, ratings, notes, and deployment are **not implemented yet**.
+Phase 5 adds a real private library: signed-in readers can save Open Library books, remove them, move them between three reading statuses, filter their shelves, and see live summary counts. Every record is stored in Supabase PostgreSQL through Prisma and scoped to the Clerk user on the server. Ratings, notes, and deployment are **not implemented yet**.
 
 ## Run locally
 
@@ -41,9 +41,10 @@ npm run db:generate
 npm run db:migrate -- --name describe_the_change
 npm run db:status
 npm run db:check
+npm run db:check-library
 ```
 
-`db:migrate` creates and applies a development migration. `db:deploy` applies already committed migrations in hosted environments. `db:check` makes harmless queries that confirm the `SavedBook` table is available and report whether row-level security is enabled. It never prints a connection string.
+`db:migrate` creates and applies a development migration. `db:deploy` applies already committed migrations in hosted environments. `db:check` makes harmless queries that confirm the `SavedBook` table is available and report whether row-level security is enabled. `db:check-library` creates and removes one reserved temporary record while checking duplicate handling, status filtering, and owner isolation. Neither command prints a connection string.
 
 ## Understanding this starter
 
@@ -53,7 +54,7 @@ npm run db:check
 - `src/app/icon.svg` provides Folio's browser icon.
 - `next.config.ts`, `tsconfig.json`, and `eslint.config.mjs` configure Next.js, strict type checking, and lint rules.
 
-Next.js runs on Node.js during development and production serving. It can pre-render this static page during the build. Later milestones add request-time server logic; a separate backend server is unnecessary for the planned scope.
+Next.js runs on Node.js during development and production serving. Server Components read the authenticated library, while Node.js Route Handlers validate and apply mutations. A separate backend server is unnecessary for this scope.
 
 ## npm learning guide
 
@@ -80,8 +81,8 @@ For compatibility problems, read the actual npm error, check `node --version`, `
 
 | Technology | Role | Status |
 | --- | --- | --- |
-| Next.js App Router, React, TypeScript | Pages, components, typed application code | Implemented starter |
-| Standard CSS | Responsive visual design | Implemented starter |
+| Next.js App Router, React, TypeScript | Pages, components, typed application code | Implemented |
+| Standard CSS | Responsive visual design | Implemented |
 | Node.js | Server runtime | Used locally |
 | npm | Dependency installation and scripts | Implemented |
 | Open Library | Real book discovery through a server-side integration | Implemented |
@@ -90,7 +91,7 @@ For compatibility problems, read the actual npm error, check `node --version`, `
 | Supabase PostgreSQL | Persistent relational storage; no Supabase Auth | Implemented and verified |
 | Vercel Hobby | Next.js hosting | Phase 8 |
 
-Architecture (discovery implemented; authenticated persistence planned):
+Architecture:
 
 ```text
 Browser → React / Next.js → server logic → Prisma → Supabase PostgreSQL
@@ -98,7 +99,7 @@ Next.js server → Open Library Search API → normalized book results
 Clerk → server-verified identity → owner-scoped queries → personal records
 ```
 
-Saved books will store their own metadata so reading an existing library does not require Open Library. A compound uniqueness constraint will prevent duplicate books per user. All personal reads and writes will derive the user ID from Clerk on the server, never from a browser-submitted owner ID.
+Saved books store their own metadata, so reading an existing library does not require Open Library. A compound uniqueness constraint prevents duplicate books per user. All personal reads and writes derive the user ID from Clerk on the server, never from a browser-submitted owner ID.
 
 ## Development checkpoints
 
@@ -180,6 +181,24 @@ Official references reviewed for this integration:
 - `npm run lint`, `npm run typecheck`, and `npm run build`: passed with the configured Clerk and Supabase environment.
 - Browser: signed-out navigation contains one **My library** link and no Discover link or search form; the public account CTA remains available. Signed-in rendering goes directly to the completion-enabled discovery desk without the former welcome-back hero.
 - `.env.local` remains ignored and no database credential is tracked.
+
+## Phase 5: Personal library
+
+### Request and ownership flow
+
+The library page is a Server Component. It calls `auth.protect()`, obtains the verified Clerk user ID, and passes that ID to the server-only data layer. Prisma reads only rows whose `clerkUserId` matches that session. The page runs its filtered book query and grouped status-count query in parallel, returning only the fields the client components render.
+
+Saving, status changes, and removal use Node.js Route Handlers under `/api/library`. Each handler authenticates the request again because hiding a control in React is not an authorization boundary. Inputs are treated as unknown, normalized, and length-checked. Update and delete queries include both the record ID and server-derived Clerk ID, so another user's valid record ID still cannot be changed. The browser never submits an owner ID.
+
+Saving uses the database's compound unique key with an upsert that has an empty update. Repeated saves therefore return the existing record instead of adding a duplicate or replacing trusted saved metadata. New records use the schema default `WANT_TO_READ` status.
+
+### Phase 5 verification results
+
+- `npm test`: all nine test groups passed, including saved-book validation, status/filter parsing, and UUID validation.
+- Signed-out `POST /api/library`: returned `401` and created no record.
+- `npm run db:check-library`: live Supabase create, duplicate handling, owner-scoped update rejection, status filtering, own update, and removal all passed; cleanup ran in `finally`.
+- `npm run lint`, `npm run typecheck`, and `npm run build`: passed. The production build includes `/api/library`, `/api/library/[id]`, and the dynamic `/library` page.
+- Signed-out browser: public introduction rendered without Discover or search controls. The authenticated browser session rendered the completion-enabled discovery page with one **My library** link before its existing tab stopped repainting after the production server restart; persistence behavior was verified through the live integration check rather than claimed as a completed browser mutation cycle.
 
 ## Phase 1 manual review (historical checkpoint)
 
