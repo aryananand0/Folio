@@ -6,7 +6,7 @@ Folio is an individual Computer Science capstone research project: a personal re
 
 ## Current milestone
 
-Phase 5 adds a real private library: signed-in readers can save Open Library books, remove them, move them between three reading statuses, filter their shelves, and see live summary counts. Every record is stored in Supabase PostgreSQL through Prisma and scoped to the Clerk user on the server. Ratings, notes, and deployment are **not implemented yet**.
+Phase 7 refines the completed application: signed-in readers can search Open Library, save books, organize their private shelves, and persist ratings and notes in Supabase PostgreSQL. This milestone strengthens accessibility, error recovery, responsive behavior, and automated authorization checks. Deployment remains for Phase 8.
 
 ## Run locally
 

@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Folio | Your books. Your reading journey.",
-  description: "Discover books by title or author with Folio. A thoughtful home for your reading life, with personal libraries coming soon.",
+  description: "Discover books, organize a private reading library, and keep personal ratings and notes with Folio.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

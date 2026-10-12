@@ -21,6 +21,7 @@ export default function BookSearch() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [focused, setFocused] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [selected, setSelected] = useState<Book | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const defaultData = useRef<SearchData | null>(null);
@@ -90,7 +91,27 @@ export default function BookSearch() {
   function chooseSuggestion(title: string) {
     setQuery(title);
     setFocused(false);
+    setActiveSuggestion(-1);
     inputRef.current?.focus();
+  }
+
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!suggestions.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setFocused(true);
+      setActiveSuggestion((current) => current >= suggestions.length - 1 ? 0 : current + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setFocused(true);
+      setActiveSuggestion((current) => current <= 0 ? suggestions.length - 1 : current - 1);
+    } else if (event.key === "Enter" && activeSuggestion >= 0) {
+      event.preventDefault();
+      chooseSuggestion(suggestions[activeSuggestion]);
+    } else if (event.key === "Escape") {
+      setFocused(false);
+      setActiveSuggestion(-1);
+    }
   }
 
   return (
@@ -125,23 +146,34 @@ export default function BookSearch() {
               placeholder="Start typing a title or author"
               maxLength={MAX_QUERY_LENGTH}
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => { setQuery(event.target.value); setActiveSuggestion(-1); }}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
+              onKeyDown={handleSearchKeyDown}
               aria-autocomplete="list"
               aria-controls="book-suggestions"
               aria-expanded={showSuggestions}
+              aria-activedescendant={showSuggestions && activeSuggestion >= 0 ? `book-suggestion-${activeSuggestion}` : undefined}
               aria-describedby="search-help"
               role="combobox"
             />
             {loading && <span className="search-spinner" aria-hidden="true" />}
-            {query && <button className="search-clear" type="button" onClick={() => { setQuery(""); inputRef.current?.focus(); }} aria-label="Clear search">Clear</button>}
+            {query && <button className="search-clear" type="button" onClick={() => { setQuery(""); setActiveSuggestion(-1); inputRef.current?.focus(); }} aria-label="Clear search">Clear</button>}
           </div>
           {showSuggestions && (
             <ul id="book-suggestions" className="search-suggestions" role="listbox" aria-label="Suggested book titles">
               {suggestions.map((title) => (
-                <li key={title} role="option" aria-selected="false">
-                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseSuggestion(title)}>
+                <li key={title} role="presentation">
+                  <button
+                    id={`book-suggestion-${suggestions.indexOf(title)}`}
+                    type="button"
+                    role="option"
+                    aria-selected={activeSuggestion === suggestions.indexOf(title)}
+                    tabIndex={-1}
+                    onMouseEnter={() => setActiveSuggestion(suggestions.indexOf(title))}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => chooseSuggestion(title)}
+                  >
                     <HighlightedTitle title={title} query={query} />
                   </button>
                 </li>

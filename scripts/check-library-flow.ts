@@ -22,15 +22,29 @@ try {
     update: {},
     create: { clerkUserId, openLibraryKey, title: "Duplicate", author: "Folio" },
   });
+  const otherSaved = await prisma.savedBook.upsert({
+    where: { clerkUserId_openLibraryKey: { clerkUserId: otherUserId, openLibraryKey } },
+    update: {},
+    create: { clerkUserId: otherUserId, openLibraryKey, title: "Other user copy", author: "Folio" },
+  });
 
   assert.equal(await prisma.savedBook.count({ where: { clerkUserId, openLibraryKey } }), 1);
+  assert.equal(await prisma.savedBook.count({ where: { clerkUserId: otherUserId, openLibraryKey } }), 1);
   assert.equal(saved.status, "WANT_TO_READ");
+
+  const ownRows = await prisma.savedBook.findMany({ where: { clerkUserId } });
+  assert.ok(ownRows.every((row) => row.clerkUserId === clerkUserId));
+  assert.ok(!ownRows.some((row) => row.id === otherSaved.id));
 
   const crossOwnerUpdate = await prisma.savedBook.updateMany({
     where: { id: saved.id, clerkUserId: otherUserId },
     data: { status: "FINISHED", rating: 1, notes: "Should not be saved" },
   });
   assert.equal(crossOwnerUpdate.count, 0);
+  const crossOwnerDelete = await prisma.savedBook.deleteMany({
+    where: { id: saved.id, clerkUserId: otherUserId },
+  });
+  assert.equal(crossOwnerDelete.count, 0);
 
   const ownUpdate = await prisma.savedBook.updateMany({
     where: { id: saved.id, clerkUserId },
@@ -57,8 +71,9 @@ try {
   const removed = await prisma.savedBook.deleteMany({ where: { id: saved.id, clerkUserId } });
   assert.equal(removed.count, 1);
   assert.equal(await prisma.savedBook.count({ where: { clerkUserId, openLibraryKey } }), 0);
+  assert.equal(await prisma.savedBook.count({ where: { clerkUserId: otherUserId, openLibraryKey } }), 1);
 
-  console.log("Library persistence, duplicate handling, rating and notes updates, clearing, owner isolation, and removal passed.");
+  console.log("Library persistence, duplicate handling, rating and notes updates, clearing, read/write owner isolation, and removal passed.");
 } finally {
   await prisma.savedBook.deleteMany({ where: { clerkUserId: { in: [clerkUserId, otherUserId] }, openLibraryKey } });
   await prisma.$disconnect();
